@@ -28,13 +28,35 @@ if [ -d $NVM_DIR ]; then
 fi
 PIP=$(command -v pip)
 if [ ! -z "$PIP" ]; then
-  echo ""
-  echo "Updating pip..."
-  pip install -U pip
+  if [ $PIP == $HOME/.local/bin/pip ]; then
+    echo ""
+    echo "Updating pip..."
+    pip install -U pip
+    AWS=$(command -v aws)
+    if [ ! -z "$AWS" ]; then
+      if [ $AWS == $HOME/.local/bin/aws ]; then
+        echo ""
+        echo "Updating aws-cli..."
+        pip install -U awscli
+      else
+        echo "Unable to update aws since it is not installed for the local user."
+      fi
+    fi
+  else
+    echo "Unable to update pip since it is not installed for the local user."
+  fi
 fi
 PLATFORM=$(command -v platform)
 if [ ! -z "$PLATFORM" ]; then
   echo ""
   echo "Updating platform..."
   platform self-update --yes
+fi
+RVM=$(command -v rvm)
+if [ ! -z "$RVM" ]; then
+  echo ""
+  echo "Updating rvm..."
+  rvm get head
+  rvm reload
+  rvm get stable --auto
 fi
