@@ -1,0 +1,34 @@
+#!/bin/bash
+echo "Updating software packages..."
+if [ -f /etc/redhat-release ]; then
+  sudo yum update -y
+  sudo yum clean all
+else
+  sudo apt-get update
+  sudo apt-get dist-upgrade -y
+  sudo apt-get -f install
+  sudo apt-get autoremove --purge -y
+  sudo apt-get clean
+fi
+COMPOSER=$(command -v composer)
+if [ ! -z "$COMPOSER" ]; then
+  echo ""
+  echo "Updating composer..."
+  composer self-update
+  echo ""
+  echo "Updating composer global packages..."
+  composer global update
+fi
+NVM_DIR="$HOME/.nvm"
+if [ -d $NVM_DIR ]; then
+  echo ""
+  echo "Updating nodejs..."
+  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
+  nvm install stable
+fi
+PLATFORM=$(command -v platform)
+if [ ! -z "$PLATFORM" ]; then
+  echo ""
+  echo "Updating platform..."
+  platform self-update --yes
+fi
