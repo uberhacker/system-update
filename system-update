@@ -89,4 +89,10 @@ if [ $CONFIRM == "-y" ]; then
     rvm reload
     rvm get stable --auto
   fi
+  WP=$(command -v wp)
+  if [ ! -z "$WP" ]; then
+    echo ""
+    echo "Updating wp-cli..."
+    wp cli update
+  fi
 fi
