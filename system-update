@@ -1,62 +1,92 @@
 #!/bin/bash
-echo "Updating software packages..."
+OS=
 if [ -f /etc/redhat-release ]; then
-  sudo yum update -y
-  sudo yum clean all
-else
-  sudo apt-get update
-  sudo apt-get dist-upgrade -y
-  sudo apt-get -f install
-  sudo apt-get autoremove --purge -y
-  sudo apt-get clean
+  OS="RedHat"
 fi
-COMPOSER=$(command -v composer)
-if [ ! -z "$COMPOSER" ]; then
-  echo ""
-  echo "Updating composer..."
-  composer self-update
-  echo ""
-  echo "Updating composer global packages..."
-  composer global update
+if [ -f /etc/system-release ]; then
+  OS="CentOS"
 fi
-NVM_DIR="$HOME/.nvm"
-if [ -d $NVM_DIR ]; then
-  echo ""
-  echo "Updating nodejs..."
-  [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
-  nvm install stable
+if [ -f /etc/debian_version ]; then
+  OS="Debian"
 fi
-PIP=$(command -v pip)
-if [ ! -z "$PIP" ]; then
-  if [ $PIP == $HOME/.local/bin/pip ]; then
-    echo ""
-    echo "Updating pip..."
-    pip install -U pip
-    AWS=$(command -v aws)
-    if [ ! -z "$AWS" ]; then
-      if [ $AWS == $HOME/.local/bin/aws ]; then
-        echo ""
-        echo "Updating aws-cli..."
-        pip install -U awscli
-      else
-        echo "Unable to update aws since it is not installed for the local user."
-      fi
-    fi
+if [ -z "$OS" ]; then
+  echo "Operating system not supported."
+  exit 1
+fi
+CONFIRM="-y"
+if test $1; then
+  if [[ $1 == "-s" || $1 == "--simulate" ]]; then
+    CONFIRM="-n"
   else
-    echo "Unable to update pip since it is not installed for the local user."
+    echo "Usage: $0 [-s | --simulate]"
+    exit 1
   fi
 fi
-PLATFORM=$(command -v platform)
-if [ ! -z "$PLATFORM" ]; then
-  echo ""
-  echo "Updating platform..."
-  platform self-update --yes
+if [ $OS == "Debian" ]; then
+  sudo apt-get update
+  if [ $CONFIRM == "-y" ]; then
+    sudo apt-get dist-upgrade -y
+    sudo apt-get -f install
+    sudo apt-get autoremove --purge -y
+    sudo apt-get clean
+  else
+    sudo apt-get dist-upgrade --assume-no
+  fi
+else
+  sudo yum update $CONFIRM
+  sudo yum clean all
 fi
-RVM=$(command -v rvm)
-if [ ! -z "$RVM" ]; then
-  echo ""
-  echo "Updating rvm..."
-  rvm get head
-  rvm reload
-  rvm get stable --auto
+if [ $CONFIRM == "-y" ]; then
+  COMPOSER=$(command -v composer)
+  if [ ! -z "$COMPOSER" ]; then
+    echo ""
+    echo "Updating composer..."
+    composer self-update
+    echo ""
+    echo "Updating composer global packages..."
+    composer global update
+  fi
+  NVM_DIR="$HOME/.nvm"
+  if [ -d $NVM_DIR ]; then
+    echo ""
+    echo "Updating nodejs..."
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
+    nvm install stable
+  fi
+  PIP=$(command -v pip)
+  if [ ! -z "$PIP" ]; then
+    if [ $PIP == $HOME/.local/bin/pip ]; then
+      echo ""
+      echo "Updating pip..."
+      pip install -U pip --user
+      AWS=$(command -v aws)
+      if [ ! -z "$AWS" ]; then
+        if [ $AWS == $HOME/.local/bin/aws ]; then
+          echo ""
+          echo "Updating aws-cli..."
+          pip install -U awscli --user
+        else
+          echo ""
+          echo "Unable to update aws since it is not installed for the local user."
+        fi
+      fi
+    else
+      echo ""
+      echo "Unable to update pip since it is not installed for the local user."
+    fi
+  fi
+  PLATFORM=$(command -v platform)
+  if [ ! -z "$PLATFORM" ]; then
+    echo ""
+    echo "Updating platform..."
+    platform self-update --yes
+  fi
+  RVM=$(command -v rvm)
+  if [ ! -z "$RVM" ]; then
+    echo ""
+    echo "Updating rvm..."
+    rvm get head
+    rvm reload
+    rvm get stable --auto
+  fi
 fi
