@@ -43,7 +43,7 @@ if [ $CONFIRM == "-y" ]; then
     echo "Updating composer..."
     composer self-update
     echo ""
-    echo "Updating composer global packages..."
+    echo "Updating composer global projects..."
     composer global update
   fi
   NVM_DIR="$HOME/.nvm"
