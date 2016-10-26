@@ -93,6 +93,6 @@ if [ $CONFIRM == "-y" ]; then
   if [ ! -z "$WP" ]; then
     echo ""
     echo "Updating wp-cli..."
-    wp cli update
+    wp cli update --yes
   fi
 fi
