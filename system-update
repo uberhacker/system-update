@@ -45,6 +45,18 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "Updating composer global projects..."
     composer global update
+    CGR=$(command -v cgr)
+    if [ ! -z "$CGR" ]; then
+      echo ""
+      echo "Updating cgr projects..."
+      cgr update
+    fi
+  fi
+  DRUSH=$(command -v drush-versions)
+  if [ -d $DRUSH ]; then
+    echo ""
+    echo "Updating drush projects..."
+    drush-versions up
   fi
   NVM_DIR="$HOME/.nvm"
   if [ -d $NVM_DIR ]; then
@@ -85,9 +97,8 @@ if [ $CONFIRM == "-y" ]; then
   if [ ! -z "$RVM" ]; then
     echo ""
     echo "Updating rvm..."
-    rvm get head
+    curl -sSL https://get.rvm.io | bash -s stable
     rvm reload
-    rvm get stable --auto
   fi
   WP=$(command -v wp)
   if [ ! -z "$WP" ]; then
