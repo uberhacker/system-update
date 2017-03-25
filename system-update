@@ -100,6 +100,12 @@ if [ $CONFIRM == "-y" ]; then
     curl -sSL https://get.rvm.io | bash -s stable
     rvm reload
   fi
+  VIM=$(command -v vim)
+  if [ ! -z "$VIM" ]; then
+    echo ""
+    echo "Updating vim bundles..."
+    cd ~/.vim && git submodule foreach git pull && cd -
+  fi
   WP=$(command -v wp)
   if [ ! -z "$WP" ]; then
     echo ""
