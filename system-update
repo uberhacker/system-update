@@ -53,7 +53,7 @@ if [ $CONFIRM == "-y" ]; then
     fi
   fi
   DRUSH=$(command -v drush-versions)
-  if [ -d $DRUSH ]; then
+  if [ ! -z $DRUSH ]; then
     echo ""
     echo "Updating drush projects..."
     drush-versions up
