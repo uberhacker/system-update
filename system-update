@@ -63,6 +63,9 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "Updating nodejs..."
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
+    CURRENT=$(nvm current)
+    nvm use --lts
+    nvm uninstall $CURRENT
     nvm install stable
   fi
   PIP=$(command -v pip)
