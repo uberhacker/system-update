@@ -64,7 +64,12 @@ if [ $CONFIRM == "-y" ]; then
     echo "Updating nodejs..."
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
     CURRENT=$(nvm current)
-    nvm use --lts
+    nvm install --lts=argon
+    nvm install --lts=boron
+    NEW=$(nvm current)
+    if [ $NEW == $CURRENT ]; then
+      nvm use --lts=argon
+    fi
     nvm uninstall $CURRENT
     nvm install stable
   fi
