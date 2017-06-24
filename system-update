@@ -76,9 +76,9 @@ if [ $CONFIRM == "-y" ]; then
         fi
       done
     fi
-    if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
-      curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-`uname -s`-`uname -m` > /usr/local/bin/docker-compose
-      chmod +x /usr/local/bin/docker-compose
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
+      sudo curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-$(uname -s)-$(uname -m) -o $COMPOSE
+      sudo chmod +x $COMPOSE
       echo "Updated docker-compose $INSTALLED_RELEASE to $LATEST_RELEASE."
     fi
     cd -
