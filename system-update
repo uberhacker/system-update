@@ -39,7 +39,7 @@ fi
 if [ $CONFIRM == "-y" ]; then
   sudo chown -R $(whoami):$(whoami) /usr/local/bin
   COMPOSER=$(command -v composer)
-  if [ ! -z "$COMPOSER" ]; then
+  if [ ! $? ]; then
     echo ""
     echo "Updating composer..."
     composer self-update
@@ -47,22 +47,20 @@ if [ $CONFIRM == "-y" ]; then
     echo "Updating composer global projects..."
     composer global update
     CGR=$(command -v cgr)
-    if [ ! -z "$CGR" ]; then
+    if [ ! $? ]; then
       echo ""
       echo "Updating cgr projects..."
       cgr update
     fi
   fi
   COMPOSE=$(command -v docker-compose)
-  if [ ! -z $COMPOSE ]; then
+  if [ ! $? ]; then
     echo ""
     echo "Updating docker-compose..."
     INSTALLED_RELEASE=$(docker-compose --version | cut -d',' -f1 | cut -d' ' -f3)
-    if [ -d compose/ ]; then
-      rm -rf compose/
-    fi
-    git clone https://github.com/docker/compose.git
-    cd compose
+    COMPOSE_NOW="compose-$(date +%Y%m%d%H%M)"
+    git clone https://github.com/docker/compose.git $COMPOSE_NOW
+    cd $COMPOSE_NOW
     git fetch --all
     LATEST_RELEASE=$(git tag -l | grep ^1 | sort -Vr | head -1)
     RC=$(echo $LATEST_RELEASE | grep -e '[a-zA-Z]')
@@ -82,10 +80,10 @@ if [ $CONFIRM == "-y" ]; then
       echo "Updated docker-compose $INSTALLED_RELEASE to $LATEST_RELEASE."
     fi
     cd -
-    rm -rf compose/
+    rm -rf $COMPOSE_NOW/
   fi
   DRUSH=$(command -v drush-versions)
-  if [ ! -z $DRUSH ]; then
+  if [ ! $? ]; then
     echo ""
     echo "Updating drush projects..."
     drush-versions up
@@ -96,23 +94,20 @@ if [ $CONFIRM == "-y" ]; then
     echo "Updating nodejs..."
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
     CURRENT=$(nvm current)
+    nvm install iojs
     nvm install --lts=argon
     nvm install --lts=boron
-    NEW=$(nvm current)
-    if [ $NEW == $CURRENT ]; then
-      nvm use --lts=argon
-    fi
-    nvm uninstall $CURRENT
     nvm install stable
+    nvm use $CURRENT
   fi
   PIP=$(command -v pip)
-  if [ ! -z "$PIP" ]; then
+  if [ ! $? ]; then
     if [ $PIP == $HOME/.local/bin/pip ]; then
       echo ""
       echo "Updating pip..."
       pip install -U pip --user
       AWS=$(command -v aws)
-      if [ ! -z "$AWS" ]; then
+      if [ ! $? ]; then
         if [ $AWS == $HOME/.local/bin/aws ]; then
           echo ""
           echo "Updating aws-cli..."
@@ -128,26 +123,26 @@ if [ $CONFIRM == "-y" ]; then
     fi
   fi
   PLATFORM=$(command -v platform)
-  if [ ! -z "$PLATFORM" ]; then
+  if [ ! $? ]; then
     echo ""
     echo "Updating platform..."
     platform self-update --yes
   fi
   RVM=$(command -v rvm)
-  if [ ! -z "$RVM" ]; then
+  if [ ! $? ]; then
     echo ""
     echo "Updating rvm..."
     curl -sSL https://get.rvm.io | bash -s stable
     rvm reload
   fi
   VIM=$(command -v vim)
-  if [ ! -z "$VIM" ]; then
+  if [ ! $? ]; then
     echo ""
     echo "Updating vim bundles..."
     cd ~/.vim && git submodule foreach git pull && cd -
   fi
   WP=$(command -v wp)
-  if [ ! -z "$WP" ]; then
+  if [ ! $? ]; then
     echo ""
     echo "Updating wp-cli..."
     wp cli update --yes
