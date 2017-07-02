@@ -39,7 +39,7 @@ fi
 if [ $CONFIRM == "-y" ]; then
   sudo chown -R $(whoami):$(whoami) /usr/local/bin
   COMPOSER=$(command -v composer)
-  if [ ! $? ]; then
+  if [ ! -z "$COMPOSER" ]; then
     echo ""
     echo "Updating composer..."
     composer self-update
@@ -54,7 +54,7 @@ if [ $CONFIRM == "-y" ]; then
     fi
   fi
   COMPOSE=$(command -v docker-compose)
-  if [ ! $? ]; then
+  if [ ! -z "$COMPOSE" ]; then
     echo ""
     echo "Updating docker-compose..."
     INSTALLED_RELEASE=$(docker-compose --version | cut -d',' -f1 | cut -d' ' -f3)
@@ -83,7 +83,7 @@ if [ $CONFIRM == "-y" ]; then
     rm -rf $COMPOSE_NOW/
   fi
   DRUSH=$(command -v drush-versions)
-  if [ ! $? ]; then
+  if [ ! -z "$DRUSH" ]; then
     echo ""
     echo "Updating drush projects..."
     drush-versions up
@@ -101,7 +101,7 @@ if [ $CONFIRM == "-y" ]; then
     nvm use $CURRENT
   fi
   PIP=$(command -v pip)
-  if [ ! $? ]; then
+  if [ ! -z "$PIP" ]; then
     if [ $PIP == $HOME/.local/bin/pip ]; then
       echo ""
       echo "Updating pip..."
@@ -123,26 +123,26 @@ if [ $CONFIRM == "-y" ]; then
     fi
   fi
   PLATFORM=$(command -v platform)
-  if [ ! $? ]; then
+  if [ ! -z "$PLATFORM" ]; then
     echo ""
     echo "Updating platform..."
     platform self-update --yes
   fi
   RVM=$(command -v rvm)
-  if [ ! $? ]; then
+  if [ ! -z "$RVM" ]; then
     echo ""
     echo "Updating rvm..."
     curl -sSL https://get.rvm.io | bash -s stable
     rvm reload
   fi
   VIM=$(command -v vim)
-  if [ ! $? ]; then
+  if [ ! -z "$VIM" ]; then
     echo ""
     echo "Updating vim bundles..."
     cd ~/.vim && git submodule foreach git pull && cd -
   fi
   WP=$(command -v wp)
-  if [ ! $? ]; then
+  if [ ! -z "$WP" ]; then
     echo ""
     echo "Updating wp-cli..."
     wp cli update --yes
