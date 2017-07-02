@@ -47,7 +47,7 @@ if [ $CONFIRM == "-y" ]; then
     echo "Updating composer global projects..."
     composer global update
     CGR=$(command -v cgr)
-    if [ ! $? ]; then
+    if [ ! -z "$CGR" ]; then
       echo ""
       echo "Updating cgr projects..."
       cgr update
@@ -107,7 +107,7 @@ if [ $CONFIRM == "-y" ]; then
       echo "Updating pip..."
       pip install -U pip --user
       AWS=$(command -v aws)
-      if [ ! $? ]; then
+      if [ ! -z "$AWS" ]; then
         if [ $AWS == $HOME/.local/bin/aws ]; then
           echo ""
           echo "Updating aws-cli..."
