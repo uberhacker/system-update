@@ -93,12 +93,24 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "Updating nodejs..."
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
-    CURRENT=$(nvm current)
+    USED_OLD=$(nvm current)
+    MAJOR=$(nvm current | cut -d. -f1)
+    CURRENT="stable"
+    if [ "$MAJOR" == "v4" ]; then
+      CURRENT="lts/argon"
+    fi
+    if [ "$MAJOR" == "v6" ]; then
+      CURRENT="lts/boron"
+    fi
     nvm install iojs
     nvm install --lts=argon
     nvm install --lts=boron
     nvm install stable
     nvm use $CURRENT
+    USED_NEW=$(nvm current)
+    if [ $USED_OLD != $USED_NEW ]; then
+      nvm uninstall $USED_OLD
+    fi
   fi
   PIP=$(command -v pip)
   if [ ! -z "$PIP" ]; then
