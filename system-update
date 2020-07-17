@@ -1,14 +1,8 @@
 #!/bin/bash
 OS=
-if [ -f /etc/redhat-release ]; then
-  OS="RedHat"
-fi
-if [ -f /etc/system-release ]; then
-  OS="CentOS"
-fi
-if [ -f /etc/debian_version ]; then
-  OS="Debian"
-fi
+[ -f /etc/redhat-release ] && OS="RedHat"
+[ -f /etc/system-release ] && OS="CentOS"
+[ -f /etc/debian_version ] && OS="Debian"
 if [ -z "$OS" ]; then
   echo "Operating system not supported."
   exit 1
@@ -25,12 +19,13 @@ fi
 if [ $OS == "Debian" ]; then
   sudo apt-get update
   if [ $CONFIRM == "-y" ]; then
-    sudo apt-get dist-upgrade -y
+    sudo apt-get dist-upgrade -y --allow-unauthenticated
     sudo apt-get -f install
     sudo apt-get autoremove --purge -y
     sudo apt-get clean
   else
     sudo apt-get dist-upgrade --assume-no
+    exit
   fi
 else
   sudo yum update $CONFIRM
@@ -39,7 +34,7 @@ fi
 if [ $CONFIRM == "-y" ]; then
   sudo chown -R $(whoami):$(whoami) /usr/local/bin
   COMPOSER=$(command -v composer 2> /dev/null)
-  if [ ! -z "$COMPOSER" ]; then
+  if [ -n "$COMPOSER" ]; then
     echo ""
     echo "Updating composer..."
     $COMPOSER self-update
@@ -47,13 +42,13 @@ if [ $CONFIRM == "-y" ]; then
     echo "Updating composer global projects..."
     $COMPOSER global update
     CGR=$(command -v cgr 2> /dev/null)
-    if [ ! -z "$CGR" ]; then
+    if [ -n "$CGR" ]; then
       echo ""
       echo "Updating cgr projects..."
       $CGR update
     fi
     DRUSH=$(command -v drush-versions 2> /dev/null)
-    if [ ! -z "$DRUSH" ]; then
+    if [ -n "$DRUSH" ]; then
       echo ""
       echo "Updating drush projects..."
       $DRUSH up
@@ -61,7 +56,7 @@ if [ $CONFIRM == "-y" ]; then
     $COMPOSER clearcache
   fi
   COMPOSE=$(command -v docker-compose 2> /dev/null)
-  if [ ! -z "$COMPOSE" ]; then
+  if [ -n "$COMPOSE" ]; then
     echo ""
     echo "Updating docker-compose..."
     INSTALLED_RELEASE=$(docker-compose --version | cut -d',' -f1 | cut -d' ' -f3)
@@ -70,30 +65,31 @@ if [ $CONFIRM == "-y" ]; then
     cd $COMPOSE_NOW
     git fetch --all
     LATEST_RELEASE=$(git describe --abbrev=0 --tags)
-    #LATEST_RELEASE=$(git tag -l | grep ^1 | sort -Vr | head -1)
-    #RC=$(echo $LATEST_RELEASE | grep -e '[a-zA-Z]')
-    #if [ ! -z "$RC" ]; then
-    #  STABLE_RELEASE=${LATEST_RELEASE/[\-a-zA-Z]*[0-9]*/}
-    #  RELEASES=$(git tag -l | grep ^1 | sort -Vr | xargs)
-    #  for R in $RELEASES; do
-    #    if [ $R == $STABLE_RELEASE ]; then
-    #      LATEST_RELEASE=$R
-    #      break
-    #    fi
-    #  done
-    #fi
-    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
+    if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
       sudo curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-$(uname -s)-$(uname -m) -o $COMPOSE
       sudo chmod +x $COMPOSE
       echo "Updated docker-compose $INSTALLED_RELEASE to $LATEST_RELEASE."
     fi
-    cd - > /dev/null
+    cd -
     rm -rf $COMPOSE_NOW/
+  fi
+  NODEBREW=$(command -v nodebrew 2> /dev/null)
+  if [ -n "$NODEBREW" ]; then
+    echo ""
+    echo "Updating node..."
+    CURRENT=$($NODEBREW ls | grep ^current | cut -d':' -f2 | xargs)
+    MAJOR=$(echo $CURRENT | cut -d'.' -f1)
+    LATEST=$($NODEBREW ls-remote | grep $MAJOR. | xargs | awk 'NF>1{print $NF}')
+    if [ $LATEST != $CURRENT ]; then
+      $NODEBREW install $LATEST
+      $NODEBREW use $LATEST
+      $NODEBREW uninstall $CURRENT
+    fi
   fi
   NVM_DIR="$HOME/.nvm"
   if [ -d $NVM_DIR ]; then
     echo ""
-    echo "Updating nodejs..."
+    echo "Updating node..."
     [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
     USED_OLD=$(nvm current)
     MAJOR=$(nvm current | cut -d'.' -f1)
@@ -119,13 +115,13 @@ if [ $CONFIRM == "-y" ]; then
     fi
   fi
   PIP=$(command -v pip 2> /dev/null)
-  if [ ! -z "$PIP" ]; then
+  if [ -n "$PIP" ]; then
     if [ $PIP == $HOME/.local/bin/pip ]; then
       echo ""
       echo "Updating pip..."
       $PIP install -U pip --user
       AWS=$(command -v aws 2> /dev/null)
-      if [ ! -z "$AWS" ]; then
+      if [ -n "$AWS" ]; then
         if [ $AWS == $HOME/.local/bin/aws ]; then
           echo ""
           echo "Updating aws-cli..."
@@ -141,26 +137,26 @@ if [ $CONFIRM == "-y" ]; then
     fi
   fi
   PLATFORM=$(command -v platform 2> /dev/null)
-  if [ ! -z "$PLATFORM" ]; then
+  if [ -n "$PLATFORM" ]; then
     echo ""
     echo "Updating platform..."
     $PLATFORM self-update --yes
   fi
   RVM=$(command -v rvm 2> /dev/null)
-  if [ ! -z "$RVM" ]; then
+  if [ -n "$RVM" ]; then
     echo ""
     echo "Updating rvm..."
     curl -sSL https://get.rvm.io | bash -s stable
     $RVM reload
   fi
   VIM=$(command -v vim 2> /dev/null)
-  if [ ! -z "$VIM" ]; then
+  if [ -n "$VIM" ]; then
     echo ""
     echo "Updating vim bundles..."
     cd ~/.vim && git submodule foreach git pull && cd -
   fi
   WP=$(command -v wp 2> /dev/null)
-  if [ ! -z "$WP" ]; then
+  if [ -n "$WP" ]; then
     echo ""
     echo "Updating wp-cli..."
     $WP cli update --yes
