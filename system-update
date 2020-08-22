@@ -64,7 +64,7 @@ if [ $CONFIRM == "-y" ]; then
     git clone https://github.com/docker/compose.git $COMPOSE_NOW
     cd $COMPOSE_NOW
     git fetch --all
-    LATEST_RELEASE=$(git describe --abbrev=0 --tags)
+    LATEST_RELEASE=$(git tag -l --sort=-version:refname | grep -v "[alpha|beta|docs|rc|v]" | head -1)
     if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
       sudo curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-$(uname -s)-$(uname -m) -o $COMPOSE
       sudo chmod +x $COMPOSE
@@ -150,7 +150,7 @@ if [ $CONFIRM == "-y" ]; then
     $RVM reload
   fi
   VIM=$(command -v vim 2> /dev/null)
-  if [ -n "$VIM" ]; then
+  if [[ -n "$VIM" && -d ~/.vim ]]; then
     echo ""
     echo "Updating vim bundles..."
     cd ~/.vim && git submodule foreach git pull && cd -
