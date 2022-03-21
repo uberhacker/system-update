@@ -81,9 +81,11 @@ if [ $CONFIRM == "-y" ]; then
     MAJOR=$(echo $CURRENT | cut -d'.' -f1)
     LATEST=$($NODEBREW ls-remote | grep $MAJOR. | xargs | awk 'NF>1{print $NF}')
     if [ $LATEST != $CURRENT ]; then
+      YARN=$(command -v yarn 2> /dev/null)
       $NODEBREW install $LATEST
       $NODEBREW use $LATEST
       $NODEBREW uninstall $CURRENT
+      [ -n "$YARN" ] && npm i -g yarn
     fi
   fi
   NVM_DIR="$HOME/.nvm"
