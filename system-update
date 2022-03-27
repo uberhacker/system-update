@@ -81,10 +81,14 @@ if [ $CONFIRM == "-y" ]; then
     MAJOR=$(echo $CURRENT | cut -d'.' -f1)
     LATEST=$($NODEBREW ls-remote | grep $MAJOR. | xargs | awk 'NF>1{print $NF}')
     if [ $LATEST != $CURRENT ]; then
+      NPM=$(command -v npm 2> /dev/null)
+      GULP=$(command -v gulp 2> /dev/null)
       YARN=$(command -v yarn 2> /dev/null)
       $NODEBREW install $LATEST
       $NODEBREW use $LATEST
       $NODEBREW uninstall $CURRENT
+      [ -n "$NPM" ] && npm i -g npm
+      [ -n "$GULP" ] && npm i -g gulp
       [ -n "$YARN" ] && npm i -g yarn
     fi
   fi
