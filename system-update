@@ -9,10 +9,10 @@ if [ -z "$OS" ]; then
 fi
 CONFIRM="-y"
 if test $1; then
-  if [[ $1 == "-s" || $1 == "--simulate" ]]; then
+  if [[ $1 == "-d" || $1 == "--dry-run" ]]; then
     CONFIRM="-n"
   else
-    echo "Usage: $0 [-s | --simulate]"
+    echo "Usage: $0 [-d | --dry-run]"
     exit 1
   fi
 fi
@@ -29,7 +29,10 @@ if [ $OS == "Debian" ]; then
   fi
 else
   sudo yum update $CONFIRM
-  sudo yum clean all
+  if [ $CONFIRM == "-y" ]; then
+    sudo yum autoremove -y
+    sudo yum clean all
+  fi
 fi
 if [ $CONFIRM == "-y" ]; then
   sudo chown -R $(whoami):$(whoami) /usr/local/bin
