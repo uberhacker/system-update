@@ -35,6 +35,37 @@ else
   fi
 fi
 if [ $CONFIRM == "-y" ]; then
+  if [ $OS == "Debian" ]; then
+    CODIUM=$(command -v codium 2> /dev/null)
+    if [ -n "$CODIUM" ]; then
+      if [[ "$(readlink -f $CODIUM)" != *"codium"* ]]; then
+        INSTALLED_RELEASE=$(dpkg -l|grep codium|xargs|cut -d' ' -f3)
+        LATEST_RELEASE=$(curl https://api.github.com/repos/VSCodium/vscodium/releases/latest -s | jq .name -r)
+        echo ""
+        echo "codium current version is $INSTALLED_RELEASE"
+        echo "codium latest release is $LATEST_RELEASE"
+        if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
+          echo ""
+          echo "Updating codium..."
+          case "$(uname -m)" in
+            aarch64|arm64|arm8) ARCH="arm64";;
+             arm|armv6l|armv7l) ARCH="armhf";;
+                    x64|x86_64) ARCH="amd64";;
+                             *) ARCH="unknown";;
+          esac
+          if [ $ARCH == "unknown" ]; then
+            echo "Unable to update. Architecture not supported."
+          else
+            CODIUM_DEB="codium_${LATEST_RELEASE}_${ARCH}.deb"
+            curl -L https://github.com/VSCodium/vscodium/releases/download/${LATEST_RELEASE}/${CODIUM_DEB} -o /tmp/${CODIUM_DEB}
+            sudo dpkg -i /tmp/${CODIUM_DEB}
+            rm -f /tmp/${CODIUM_DEB}
+            echo "Updated codium from $INSTALLED_RELEASE to $LATEST_RELEASE."
+          fi
+        fi
+      fi
+    fi
+  fi
   sudo chown -R $(whoami):$(whoami) /usr/local/bin
   COMPOSER=$(command -v composer 2> /dev/null)
   if [ -n "$COMPOSER" ]; then
@@ -43,7 +74,7 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "composer current version is $INSTALLED_RELEASE"
     echo "composer latest release is $LATEST_RELEASE"
-    if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
       echo ""
       echo "Updating composer..."
       $COMPOSER self-update
@@ -73,7 +104,7 @@ if [ $CONFIRM == "-y" ]; then
       echo ""
       echo "docker-compose current version is $INSTALLED_RELEASE"
       echo "docker-compose latest release is $LATEST_RELEASE"
-      if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
+      if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
         echo ""
         echo "Updating docker-compose..."
         sudo curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-$(uname -s)-$(uname -m) -o $COMPOSE
@@ -90,7 +121,7 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "nodebrew current version is $CURRENT"
     echo "nodebrew latest release is $LATEST"
-    if [ $LATEST != $CURRENT ]; then
+    if [ "$LATEST" != "$CURRENT" ]; then
       echo ""
       echo "Updating node..."
       NPM=$(command -v npm 2> /dev/null)
@@ -131,7 +162,7 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "nvm current version is $USED_OLD"
     echo "nvm latest release is $USED_NEW"
-    if [ $USED_OLD != $USED_NEW ]; then
+    if [ "$USED_OLD" != "$USED_NEW" ]; then
       nvm uninstall $USED_OLD
     fi
   fi
@@ -164,7 +195,7 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "rvm current version is $INSTALLED_RELEASE"
     echo "rvm latest release is $LATEST_RELEASE"
-    if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
       echo ""
       echo "Updating rvm..."
       $RVM get stable
@@ -177,7 +208,7 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "terminus current version is $INSTALLED_RELEASE"
     echo "terminus latest release is $LATEST_RELEASE"
-    if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
       echo ""
       echo "Updating terminus..."
       $TERMINUS self:update
@@ -196,7 +227,7 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "wp cli current version is $INSTALLED_RELEASE"
     echo "wp cli latest release is $LATEST_RELEASE"
-    if [ $INSTALLED_RELEASE != $LATEST_RELEASE ]; then
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
       echo ""
       echo "Updating wp-cli..."
       $WP cli update --yes
