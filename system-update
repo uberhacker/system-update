@@ -36,18 +36,18 @@ else
 fi
 if [ $CONFIRM == "-y" ]; then
   if [ $OS == "Debian" ]; then
+    [ -z "$(command -v jq 2> /dev/null)" ] && sudo apt update && sudo apt install jq -y
     CODIUM=$(command -v codium 2> /dev/null)
     if [ -n "$CODIUM" ]; then
       if [[ "$(readlink -f $CODIUM)" != *"codium"* ]]; then
-        [ -z "$(command -v jq 2> /dev/null)" ] && sudo apt update && sudo apt install jq -y
-        INSTALLED_RELEASE=$(codium -v|head -1)
+        INSTALLED_RELEASE=$(codium -v | head -1)
         LATEST_RELEASE=$(curl https://api.github.com/repos/VSCodium/vscodium/releases/latest -s | jq .name -r)
         echo ""
         echo "codium current version is $INSTALLED_RELEASE"
         echo "codium latest release is $LATEST_RELEASE"
         if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
           echo ""
-	  if [ -z "$(dpkg -l|grep codium)" ]; then
+          if [ -z "$(dpkg -l | grep codium)" ]; then
             echo "Unable to update since codium was not installed via apt."
           else
             echo "Updating codium..."
@@ -104,6 +104,11 @@ if [ $CONFIRM == "-y" ]; then
   COMPOSE=$(command -v docker-compose 2> /dev/null)
   if [ -n "$COMPOSE" ]; then
     if [[ "$(readlink -f $COMPOSE)" != *"docker-desktop"* ]]; then
+      if [ -z "$(dpkg -l | grep docker-compose-plugin)" ]; then
+        sudo apt update
+        sudo apt install docker-compose-plugin -y
+        sudo ln -sf /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+      fi
       INSTALLED_RELEASE=$(docker-compose -v | cut -d' ' -f4)
       LATEST_RELEASE=$(curl https://api.github.com/repos/docker/compose/releases/latest -s | jq .name -r)
       echo ""
@@ -112,8 +117,7 @@ if [ $CONFIRM == "-y" ]; then
       if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
         echo ""
         echo "Updating docker-compose..."
-        sudo curl -L https://github.com/docker/compose/releases/download/$LATEST_RELEASE/docker-compose-$(uname -s)-$(uname -m) -o $COMPOSE
-        sudo chmod +x $COMPOSE
+        sudo apt upgrade docker-compose-plugin -y
         echo "Updated docker-compose $INSTALLED_RELEASE to $LATEST_RELEASE."
       fi
     fi
