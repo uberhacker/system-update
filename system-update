@@ -70,6 +70,12 @@ if [ $CONFIRM == "-y" ]; then
     fi
   fi
   sudo chown -R $(whoami):$(whoami) /usr/local/bin
+  AGY=$(command -v agy 2> /dev/null)
+  [ -n "$AGY" ] && agy update
+  CLAUDE=$(command -v claude 2> /dev/null)
+  [ -n "$CLAUDE" ] && claude update
+  CODEX=$(command -v codex 2> /dev/null)
+  [ -n "$CODEX" ] && codex update
   COMPOSER=$(command -v composer 2> /dev/null)
   if [ -n "$COMPOSER" ]; then
     INSTALLED_RELEASE=$(composer -V 2> /dev/null | cut -d' ' -f3)
@@ -135,6 +141,14 @@ if [ $CONFIRM == "-y" ]; then
       fi
     fi
   fi
+  COPILOT=$(command -v copilot 2> /dev/null)
+  [ -n "$COPILOT" ] && copilot update
+  GROK=$(command -v grok 2> /dev/null)
+  [ -n "$GROK" ] && grok update
+  HERMES=$(command -v hermes 2> /dev/null)
+  [ -n "$HERMES" ] && hermes update
+  KILO=$(command -v kilo 2> /dev/null)
+  [ -n "$KILO" ] && kilo upgrade
   NODEBREW=$(command -v nodebrew 2> /dev/null)
   if [ -n "$NODEBREW" ]; then
     CURRENT=$($NODEBREW ls | grep ^current | cut -d':' -f2 | xargs)
@@ -210,6 +224,8 @@ if [ $CONFIRM == "-y" ]; then
       echo "Unable to update pip since it is not installed for the local user."
     fi
   fi
+  QWEN=$(command -v qwen 2> /dev/null)
+  [ -n "$QWEN" ] && qwen update
   RVM=$(command -v rvm 2> /dev/null)
   if [ -n "$RVM" ]; then
     INSTALLED_RELEASE=$(rvm -v 2> /dev/null | cut -d' ' -f2)
@@ -255,4 +271,6 @@ if [ $CONFIRM == "-y" ]; then
       $WP cli update --yes
     fi
   fi
+  ZCMDS=$(command -v zcmds 2> /dev/null)
+  [ -n "$ZCMDS" ] && pipx upgrade zcmds
 fi
