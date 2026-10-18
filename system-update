@@ -16,6 +16,20 @@ if test $1; then
     exit 1
   fi
 fi
+# Get the 7 character commit hash of the latest release.
+function get_release_commit() {
+  TAG_NAME=$(curl -s https://api.github.com/repos/${1}/releases/latest | jq -r '.tag_name')
+  TAG_SHA=$(curl -s https://api.github.com/repos/${1}/git/ref/tags/${TAG_NAME} | jq -r '.object.sha')
+  OBJECT_TYPE=$(curl -s https://api.github.com/repos/${1}/git/ref/tags/${TAG_NAME} | jq -r '.object.type')
+  if [ "$OBJECT_TYPE" = "commit" ]; then
+    echo ${TAG_SHA:0:7}
+  else
+    # Fetch the actual commit SHA from the tag object.
+    OBJ_SHA=$(curl -s https://api.github.com/repos/{owner}/{repo}/git/tags/$TAG_SHA | jq -r '.object.sha')
+    echo ${OBJ_SHA:0:7}
+  fi
+  exit
+}
 if [ $OS == "Debian" ]; then
   sudo apt-get update
   if [ $CONFIRM == "-y" ]; then
@@ -69,9 +83,23 @@ if [ $CONFIRM == "-y" ]; then
       fi
     fi
   fi
+  # This makes sure sudo is not required to update.
   sudo chown -R $(whoami):$(whoami) /usr/local/bin
   AGY=$(command -v agy 2> /dev/null)
   [ -n "$AGY" ] && agy update
+  ANYTHINGLLM=$(command -v AnythingLLMDesktop.AppImage 2> /dev/null)
+  if [ -n "$ANYTHINGLLM" ]; then
+    INSTALLED_RELEASE=$(AnythingLLMDesktop.AppImage --appimage-version 2>&1 | cut -d: -f2 | xargs)
+    LATEST_RELEASE=$(get_release_commit "Mintplex-Labs/anything-llm")
+    echo ""
+    echo "AnythingLLMDesktop current version is $INSTALLED_RELEASE"
+    echo "AnythingLLMDesktop latest release is $LATEST_RELEASE"
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
+      echo ""
+      echo "Updating AnythingLLMDesktop..."
+      export ANYTHING_LLM_INSTALL_DIR="${ANYTHINGLLM%/*}" && curl -fsSL https://cdn.anythingllm.com/latest/installer.sh | bash
+    fi
+  fi
   CLAUDE=$(command -v claude 2> /dev/null)
   [ -n "$CLAUDE" ] && claude update
   CODEX=$(command -v codex 2> /dev/null)
@@ -83,7 +111,8 @@ if [ $CONFIRM == "-y" ]; then
     echo ""
     echo "composer current version is $INSTALLED_RELEASE"
     echo "composer latest release is $LATEST_RELEASE"
-    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then echo "" echo "Updating composer..."
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
+      echo "" echo "Updating composer..."
       $COMPOSER self-update
       echo ""
       echo "Updating composer global projects..."
@@ -143,6 +172,8 @@ if [ $CONFIRM == "-y" ]; then
   fi
   COPILOT=$(command -v copilot 2> /dev/null)
   [ -n "$COPILOT" ] && copilot update
+  DEVIN=$(command -v devin 2> /dev/null)
+  [ -n "$DEVIN" ] && devin update
   GROK=$(command -v grok 2> /dev/null)
   [ -n "$GROK" ] && grok update
   HERMES=$(command -v hermes 2> /dev/null)
@@ -202,6 +233,8 @@ if [ $CONFIRM == "-y" ]; then
       nvm uninstall $USED_OLD
     fi
   fi
+  OMP=$(command -v omp 2> /dev/null)
+  [ -n "$OMP" ] && omp update
   PIP=$(command -v pip 2> /dev/null)
   if [ -n "$PIP" ]; then
     if [ $PIP == $HOME/.local/bin/pip ]; then
