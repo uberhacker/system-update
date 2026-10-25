@@ -317,12 +317,13 @@ if [ $CONFIRM == "-y" ]; then
   OLLAMA=$(command -v ollama 2> /dev/null)
   if [ -n "$OLLAMA" ]; then
     echo "Start ollama update -------------------------------------"
-    INSTALLED_RELEASE="v$(ollama -v | cut -d' ' -f4)"
+    INSTALLED_RELEASE="v$(ollama -v | head -1 | cut -d' ' -f4)"
     LATEST_RELEASE=$(curl https://api.github.com/repos/ollama/ollama/releases/latest -s | jq .tag_name -r)
     echo "ollama current version is $INSTALLED_RELEASE"
     echo "ollama latest release is $LATEST_RELEASE"
     if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
       curl -fsSL https://ollama.com/install.sh | bash
+      sudo chown -R $(whoami):$(whoami) /usr/local/bin
     else
       echo "ollama is already up to date."
     fi
@@ -341,6 +342,20 @@ if [ $CONFIRM == "-y" ]; then
       echo "omp is already up to date."
     fi
     echo "End omp update ------------------------------------------"
+  fi
+  PI=$(command -v pi 2> /dev/null)
+  if [ -n "$PI" ]; then
+    echo "Start pi update -----------------------------------------"
+    INSTALLED_RELEASE="v$(pi -v)"
+    LATEST_RELEASE=$(curl https://api.github.com/repos/earendil-works/pi/releases/latest -s | jq .tag_name -r)
+    echo "pi current version is $INSTALLED_RELEASE"
+    echo "pi latest release is $LATEST_RELEASE"
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
+      pi update
+    else
+      echo "pi is already up to date."
+    fi
+    echo "End pi update -------------------------------------------"
   fi
   PIP=$(command -v pip 2> /dev/null)
   if [ -n "$PIP" ]; then
@@ -364,7 +379,7 @@ if [ $CONFIRM == "-y" ]; then
   fi
   QWEN=$(command -v qwen 2> /dev/null)
   if [ -n "$QWEN" ]; then
-    echo "Start qwen update --------------------------------------"
+    echo "Start qwen update ---------------------------------------"
     INSTALLED_RELEASE="v$(qwen -v 2> /dev/null)"
     LATEST_RELEASE=$(curl -s https://api.github.com/repos/QwenLM/qwen-code/tags?per_page=100 | jq -r '.[].name' | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
     echo "qwen current version is $INSTALLED_RELEASE"
@@ -374,11 +389,11 @@ if [ $CONFIRM == "-y" ]; then
     else
       echo "qwen is already up to date."
     fi
-    echo "End qwen update ----------------------------------------"
+    echo "End qwen update -----------------------------------------"
   fi
   RVM=$(command -v rvm 2> /dev/null)
   if [ -n "$RVM" ]; then
-    echo "Start rvm update ---------------------------------------"
+    echo "Start rvm update ----------------------------------------"
     INSTALLED_RELEASE=$(rvm -v 2> /dev/null | cut -d' ' -f2)
     LATEST_RELEASE=$(curl https://api.github.com/repos/rvm/rvm/releases/latest -s | jq .name -r)
     echo "rvm current version is $INSTALLED_RELEASE"
@@ -388,11 +403,11 @@ if [ $CONFIRM == "-y" ]; then
     else
       echo "rvm is already up to date."
     fi
-    echo "End rvm update -----------------------------------------"
+    echo "End rvm update ------------------------------------------"
   fi
   TERMINUS=$(command -v terminus 2> /dev/null)
   if [ -n "$TERMINUS" ]; then
-    echo "Start terminus update ----------------------------------"
+    echo "Start terminus update -----------------------------------"
     INSTALLED_RELEASE=$(terminus -V 2> /dev/null | cut -d' ' -f2)
     LATEST_RELEASE=$(curl https://api.github.com/repos/pantheon-systems/terminus/releases/latest -s | jq .name -r)
     echo "terminus current version is $INSTALLED_RELEASE"
@@ -403,11 +418,11 @@ if [ $CONFIRM == "-y" ]; then
     else
       echo "terminus is already up to date."
     fi
-    echo "End terminus update ------------------------------------"
+    echo "End terminus update -------------------------------------"
   fi
   UV=$(command -v uv 2> /dev/null)
   if [ -n "$UV" ]; then
-    echo "Start uv update ----------------------------------------"
+    echo "Start uv update -----------------------------------------"
     INSTALLED_RELEASE=$(uv self version 2> /dev/null | cut -d' ' -f2)
     LATEST_RELEASE=$(curl https://api.github.com/repos/astral-sh/uv/releases/latest -s | jq .name -r)
     echo "uv current version is $INSTALLED_RELEASE"
@@ -417,17 +432,17 @@ if [ $CONFIRM == "-y" ]; then
     else
       echo "uv is already up to date."
     fi
-    echo "End uv update ------------------------------------------"
+    echo "End uv update -------------------------------------------"
   fi
   VIM=$(command -v vim 2> /dev/null)
   if [[ -n "$VIM" && -d ~/.vim/.git ]]; then
-    echo "Start vim update ---------------------------------------"
+    echo "Start vim update ----------------------------------------"
     cd ~/.vim && git submodule foreach git pull && cd -
-    echo "End vim update -----------------------------------------"
+    echo "End vim update ------------------------------------------"
   fi
   WP=$(command -v wp 2> /dev/null)
   if [ -n "$WP" ]; then
-    echo "Start wp update ----------------------------------------"
+    echo "Start wp update -----------------------------------------"
     INSTALLED_RELEASE=$(wp cli version 2> /dev/null | cut -d' ' -f2)
     LATEST_RELEASE=$(curl https://api.github.com/repos/wp-cli/wp-cli/releases/latest -s | jq .name -r | cut -d' ' -f2)
     echo "wp cli current version is $INSTALLED_RELEASE"
@@ -437,12 +452,12 @@ if [ $CONFIRM == "-y" ]; then
     else
       echo "wp is already up to date."
     fi
-    echo "End wp update ------------------------------------------"
+    echo "End wp update -------------------------------------------"
   fi
   ZCMDS=$(command -v zcmds 2> /dev/null)
   if [ -n "$ZCMDS" ]; then
-    echo "Start zcmds update -------------------------------------"
+    echo "Start zcmds update --------------------------------------"
     pipx upgrade zcmds
-    echo "End zcmds update ---------------------------------------"
+    echo "End zcmds update ----------------------------------------"
   fi
 fi
