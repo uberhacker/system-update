@@ -258,6 +258,20 @@ if [ $CONFIRM == "-y" ]; then
     fi
     echo "End kilo update -----------------------------------------"
   fi
+  LANDO=$(command -v lando 2> /dev/null)
+  if [ -n "$LANDO" ]; then
+    echo "Start lando update --------------------------------------"
+    INSTALLED_RELEASE=$(lando version | tail -1)
+    LATEST_RELEASE=$(curl https://api.github.com/repos/lando/lando/releases/latest -s | jq .tag_name -r)
+    echo "lando current version is $INSTALLED_RELEASE"
+    echo "lando latest release is $LATEST_RELEASE"
+    if [ "$INSTALLED_RELEASE" != "$LATEST_RELEASE" ]; then
+      lando update -y
+    else
+      echo "lando is already up to date."
+    fi
+    echo "End lando update ----------------------------------------"
+  fi
   NODEBREW=$(command -v nodebrew 2> /dev/null)
   if [ -n "$NODEBREW" ]; then
     echo "Start nodebrew update -----------------------------------"
