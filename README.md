@@ -17,7 +17,7 @@ $ system-update [-d | --dry-run]
 ## Examples:
 Show package updates that would be applied without actually performing the updates:
 ```
-$ system-update --simulate
+$ system-update --dry-run
 ```
 Perform package updates along with various other updates:
 ```
