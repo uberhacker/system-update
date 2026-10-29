@@ -11,7 +11,7 @@ $ sudo cp system-update /usr/local/bin
 
 ## Usage:
 ```
-$ system-update [-s | --simulate]
+$ system-update [-d | --dry-run]
 ```
 
 ## Examples:
