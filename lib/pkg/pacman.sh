@@ -23,10 +23,16 @@ pacman_pending() {
   fi
   tmp=$(tmp_dir) || return 2
   mkdir -p "$tmp/db"
+  # pacman >= 6.1 downloads as the unprivileged DownloadUser (alpm), which
+  # must be able to traverse into the temporary dbpath; mktemp made it 0700.
+  chmod 0755 "$tmp" "$tmp/db"
   ln -s /var/lib/pacman/local "$tmp/db/local"
   rc=0
-  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_root pacman -Sy --dbpath "$tmp/db" --logfile /dev/null -q >/dev/null 2>&1 || rc=$?
+  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_root pacman -Sy --dbpath "$tmp/db" --logfile /dev/null -q >"$tmp/sync.log" 2>&1 || rc=$?
   if [ "$rc" -ne 0 ]; then
+    # Show why (mirror unreachable, bad signature, ...) instead of a bare failure.
+    grep -E '^error:' "$tmp/sync.log" | tail -n 3 | while IFS= read -r line; do log_warn "$line"; done
+    run_root rm -rf -- "$tmp/db" >/dev/null 2>&1 || true
     return 2
   fi
   rc=0
@@ -58,7 +64,7 @@ pkg_pacman_update() {
     case "$rc" in
       0) count=$(grep -c . "$log"); step_dry "$count package(s) would be upgraded" ;;
       1) step_dry "no updates available" ;;
-      *) step_fail "could not check for updates"; return 0 ;;
+      *) step_fail "could not check for updates (database sync failed)"; return 0 ;;
     esac
     if [ -n "$aur" ]; then
       log_dry "would run: $aur -Sua --noconfirm (AUR, as $SU_USER)"
