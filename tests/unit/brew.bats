@@ -8,7 +8,9 @@ setup() {
   load_su
   bindir="$BATS_TEST_TMPDIR/bin"; state="$BATS_TEST_TMPDIR/state"
   mkdir -p "$bindir" "$state"
-  export PATH="$bindir:$PATH"
+  # Keep a real Homebrew (GitHub's runner image ships one) out of the way.
+  export PATH="$bindir:$(printf '%s' "$PATH" | tr ':' '\n' | grep -v linuxbrew | paste -sd: -)"
+  export SU_LINUXBREW_PREFIX="$BATS_TEST_TMPDIR/no-linuxbrew"
   export SU_PROBE_TIMEOUT=5
   export SU_TIMEOUT=20
   SU_USER_HOME="$BATS_TEST_TMPDIR/home"; mkdir -p "$SU_USER_HOME"

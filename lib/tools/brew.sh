@@ -10,7 +10,7 @@
 tool_brew_detect() {
   local bin p
   if bin=$(user_bin brew); then printf '%s\n' "$bin"; return 0; fi
-  for p in /home/linuxbrew/.linuxbrew/bin/brew "$SU_USER_HOME/.linuxbrew/bin/brew"; do
+  for p in "${SU_LINUXBREW_PREFIX:-/home/linuxbrew/.linuxbrew}/bin/brew" "$SU_USER_HOME/.linuxbrew/bin/brew"; do
     [ -x "$p" ] && { printf '%s\n' "$p"; return 0; }
   done
   return 1
