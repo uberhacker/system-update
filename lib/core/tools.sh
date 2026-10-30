@@ -101,7 +101,8 @@ install_method() {
 }
 
 # tool_probe BIN ARGS...: run a version query safely. Output is capped;
-# exit status 124 means it hung.
+# exit status 124 (coreutils), 143 (busybox, SIGTERM) or 137 (SIGKILL after
+# -k) means it hung.
 tool_probe() {
   local bin="$1"; shift
   local out rc=0
@@ -147,7 +148,7 @@ tool_identify() {
   fi
   rc=0
   out=$(tool_probe "$bin" "$@") || rc=$?
-  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ] || [ "$rc" -eq 143 ]; then
     step_skip "$bin did not answer '$*' within ${SU_PROBE_TIMEOUT}s; it looks like a different program"
     return 1
   fi

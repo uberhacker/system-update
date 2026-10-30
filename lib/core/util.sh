@@ -60,6 +60,14 @@ sudo_prime() {
     [ "$SU_SUDO_OK" = 1 ]
     return
   fi
+  # A NOPASSWD rule or cached credentials: no prompt needed. Plain "sudo -v"
+  # is not enough here because, with the default verifypw=all, it asks for a
+  # password whenever any matching entry needs one (openSUSE ships
+  # "ALL ALL=(ALL) ALL" next to the user's NOPASSWD rule).
+  if sudo -n true 2>/dev/null; then
+    SU_SUDO_OK=1
+    return 0
+  fi
   log_info "sudo is required for system packages; validating credentials"
   if sudo -v; then
     SU_SUDO_OK=1

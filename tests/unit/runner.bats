@@ -153,3 +153,25 @@ s_silent() { :; }
   assert_equal 0 "$status"
   assert_contains "$output" "1 ok, 0 updated, 0 skipped, 0 failed"
 }
+
+@test "sudo_prime accepts a NOPASSWD rule even when sudo -v would ask" {
+  local bindir="$BATS_TEST_TMPDIR/sudobin"
+  # sudo -n true works (NOPASSWD), sudo -v fails (verifypw=all with another
+  # entry that needs a password, as on openSUSE Leap).
+  make_fake_bin "$bindir" sudo 'case "$1" in -n) exit 0;; -v) exit 1;; esac; exit 1'
+  is_root() { return 1; }
+  PATH="$bindir:$PATH"
+  SU_SUDO_OK=""
+  sudo_prime
+  assert_equal 1 "$SU_SUDO_OK"
+}
+
+@test "sudo_prime reports unavailable when sudo cannot be used" {
+  local bindir="$BATS_TEST_TMPDIR/sudobin"
+  make_fake_bin "$bindir" sudo 'exit 1'
+  is_root() { return 1; }
+  PATH="$bindir:$PATH"
+  SU_SUDO_OK=""
+  run sudo_prime
+  assert_equal 1 "$status"
+}

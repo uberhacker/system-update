@@ -167,3 +167,13 @@ setup() {
   ! version_lt 1.0.0 1.0.0
   version_lt 1.95.3.24321 1.96.0.25001
 }
+
+@test "a hang killed by busybox timeout (exit 143) is also treated as a hang" {
+  make_fake_bin "$bindir" kilo 'while :; do sleep 1; done'
+  # busybox timeout reports the child's SIGTERM as 143, not 124.
+  make_fake_bin "$bindir" timeout 'exit 143'
+  tools_discover
+  tool_kilo_update
+  assert_equal skipped "$STEP_RESULT"
+  assert_contains "$STEP_NOTE" "did not answer"
+}
