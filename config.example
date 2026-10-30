@@ -56,3 +56,30 @@
 # Remove orphaned packages after upgrading (apt autoremove, dnf autoremove,
 # pacman -Rns $(pacman -Qtdq), ...).
 #AUTOREMOVE=1
+
+# Opt-in steps (off by default). Each has a flag of the same name in lower
+# case with dashes (--nvim-plugins, --runtimes, --npm-globals, --go-toolchain,
+# --containers).
+
+# Sync Neovim plugins headlessly (lazy.nvim "Lazy! sync", packer PackerSync
+# or vim-plug PlugUpdate).
+#NVIM_PLUGINS=0
+
+# Upgrade runtimes managed by mise (`mise upgrade`, within each tool's
+# configured spec) and asdf (the pins in ~/.tool-versions move to the newest
+# version of the same major; project .tool-versions files are never changed).
+#RUNTIMES=0
+
+# `npm update -g` under the user's own Node (nvm, nodebrew, ~/.npm-global).
+# A distro Node whose global prefix is outside the home is never touched.
+#NPM_GLOBALS=0
+
+# Replace /usr/local/go with the latest stable Go from go.dev, sha256-verified
+# and swapped in atomically. Only when /usr/local/go exists and no distro
+# package owns it.
+#GO_TOOLCHAIN=0
+
+# distrobox upgrade --all, the package manager inside each toolbox, podman
+# auto-update, and a re-pull of the images used by existing podman/docker
+# containers (pull only; containers are never recreated or restarted).
+#CONTAINERS=0

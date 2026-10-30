@@ -2,9 +2,9 @@
 
 Update a Linux system with every update imaginable: the distribution's
 packages, Flatpak, Snap, firmware, and the third-party developer tools that
-live outside the package manager (Node via nvm, Composer, Docker Compose,
-VSCodium, the AI coding CLIs, ...). One command, one summary, a non-zero exit
-when anything failed.
+live outside the package manager (Node via nvm, rustup and cargo, Composer,
+Docker Compose, Homebrew, the Azure CLI, VSCodium, the AI coding CLIs, ...).
+One command, one summary, a non-zero exit when anything failed.
 
 This is a modular rewrite of [Ed Reel's](https://github.com/uberhacker)
 original `system-update` script. The idea, the list of tools and most of the
@@ -101,6 +101,20 @@ its native mechanism:
 | AWS CLI | v2 is noted as managed by its own installer; v1 via pipx when it lives there |
 | rvm | `rvm get stable` |
 | vim | `git submodule update --init --remote --recursive` on `~/.vim` when it is a git checkout |
+| rustup | `rustup self update` (unless rustup itself is a distro or Homebrew package) then `rustup update --no-self-update`; the dry run uses `rustup check` |
+| cargo | `cargo install-update -a` for every crate in `~/.cargo/.crates.toml`, when the `cargo-update` crate is installed; otherwise a skip that says so. Tools found under `~/.cargo/bin` are routed here |
+| Azure CLI, Bicep | `az upgrade --yes --all false` only when `az` is not a distro package (Microsoft's apt/rpm repository counts as one); `az bicep upgrade` for the Bicep under `~/.azure/bin`; a standalone `bicep` binary from the `Azure/bicep` release only when a sha256 is published for it, otherwise skipped with a note |
+| cloudflared | a standalone binary is replaced from the `cloudflare/cloudflared` release with the sha256 from the release notes or checksums asset, `install -m 0755`; without a checksum nothing is installed; a copy from Cloudflare's package repository is left to the system step |
+| gh extensions | `gh extension upgrade --all` as the user (`--dry-run` in a dry run); skipped cleanly when none are installed or `gh` is not authenticated |
+| Homebrew on Linux | `brew update`, `brew upgrade` (and `brew autoremove` unless `--no-autoremove`) as the user; never as root, never on another user's prefix |
+| Oh My Zsh, Oh My Bash | their own `tools/upgrade.sh`, non-interactively (`DISABLE_UPDATE_PROMPT=true`, no `-i`); the commit before and after says whether anything moved |
+| tmux plugins (TPM) | `~/.tmux/plugins/tpm/bin/update_plugins all` |
+| mise | `mise self-update --yes` (not for distro/Homebrew installs), `mise plugins update`; runtimes only with `--runtimes` (`mise upgrade`, within each tool's configured spec, never `--bump`) |
+| asdf | bash asdf (<= 0.15): `asdf update` unless the package disabled it; Go asdf (>= 0.16): no self-update exists and its releases publish no sha256, so it says how to update it; `asdf plugin update --all` for both; runtimes only with `--runtimes` (the pins in `~/.tool-versions` move to the newest version of the same major and become the home default; project files are never touched) |
+| Neovim plugins (opt-in `--nvim-plugins`) | `nvim --headless "+Lazy! sync" +qa` for lazy.nvim, `PackerSync` for packer, `PlugUpdate` for vim-plug, with a timeout; `lazy-lock.json` before and after tells whether plugins moved |
+| npm globals (opt-in `--npm-globals`) | `npm update -g` under the user's own Node (nvm, nodebrew, `~/.npm-global`); a global prefix outside the home (a distro Node) is never written to |
+| Go in `/usr/local/go` (opt-in `--go-toolchain`) | latest stable from `go.dev/dl/?mode=json`, tarball sha256-verified against that JSON, unpacked next to `/usr/local/go` and swapped in with two renames (old toolchain restored on any failure); only when `/usr/local/go` exists and no distro package owns it |
+| containers (opt-in `--containers`) | `distrobox upgrade --all`; the package manager found inside each `toolbox` container (dnf5/dnf/apt/zypper/pacman/apk, non-interactive); `podman auto-update` for units that opted in; a re-pull of every image used by an existing podman/docker container. Images are only pulled, containers are never recreated or restarted, and the summary says how many images got a newer version |
 
 ### Identification guard
 
@@ -173,6 +187,12 @@ Options:
                           allow vendor "curl | sh" installers (ollama, AnythingLLM)
       --aur               run an AUR helper (yay/paru) as the invoking user on Arch
       --no-autoremove     do not remove orphaned packages after upgrading
+  Opt-in steps (off by default; config keys NVIM_PLUGINS, RUNTIMES, ...):
+      --nvim-plugins      sync Neovim plugins (lazy.nvim, packer or vim-plug)
+      --runtimes          upgrade runtimes managed by mise/asdf within their configured specs
+      --npm-globals       npm update -g under the user's own Node (nvm); never a system prefix
+      --go-toolchain      replace /usr/local/go with the latest stable Go (sha256-verified)
+      --containers        distrobox/toolbox upgrades, podman auto-update, re-pull container images
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
@@ -183,7 +203,24 @@ Options:
 Step names for `--only` and `--skip`: `system` (or the package manager's
 name: `apt`, `dnf`, `zypper`, `pacman`, `apk`, `xbps`, `emerge`,
 `rpm-ostree`), `flatpak`, `snap`, `firmware`, `reboot-check`, `tools`, and
-any tool name shown by `--list`.
+any tool name shown by `--list` (`rustup`, `cargo`, `azure-cli`, `bicep`,
+`cloudflared`, `gh-extensions`, `brew`, `oh-my-zsh`, `oh-my-bash`, `tpm`,
+`mise`, `asdf`, `nvim-plugins`, `npm-globals`, `go`, `containers`, `nvm`,
+`composer`, `docker-compose`, ...).
+
+### Opt-in steps
+
+Five steps are detected and listed but do nothing until you turn them on,
+because they change things a system update normally leaves alone: Neovim
+plugins (`--nvim-plugins` / `NVIM_PLUGINS=1`), the runtimes managed by mise
+and asdf (`--runtimes` / `RUNTIMES=1`), npm global packages (`--npm-globals`
+/ `NPM_GLOBALS=1`), the Go toolchain in `/usr/local/go` (`--go-toolchain`,
+or `--go` / `GO_TOOLCHAIN=1`) and containers (`--containers` /
+`CONTAINERS=1`). Each flag is its config key in lower case; off, the step
+shows in the summary as `skipped: off by default; enable with ...`. The
+runtime upgrades are conservative: mise moves a tool only within the version
+spec configured for it, asdf only within the major of the pin in your home
+`~/.tool-versions`, and neither touches a project's own pinned versions.
 
 The script never prompts. Package managers run with their non-interactive
 flags (`-y`, `--noconfirm`, `--non-interactive`, `DEBIAN_FRONTEND=noninteractive`
@@ -241,7 +278,12 @@ ignored. See [`config.example`](config.example).
 | `FIRMWARE` | `0` | apply fwupd updates instead of listing them |
 | `PRUNE_NODE` | `0` | remove other Node.js versions after installing the LTS |
 | `AUR_HELPER` | `0` | run `yay`/`paru` as the invoking user on Arch |
-| `AUTOREMOVE` | `1` | remove orphaned packages after upgrading |
+| `AUTOREMOVE` | `1` | remove orphaned packages after upgrading (also `brew autoremove`) |
+| `NVIM_PLUGINS` | `0` | sync Neovim plugins headlessly (`--nvim-plugins`) |
+| `RUNTIMES` | `0` | upgrade mise/asdf runtimes within their specs (`--runtimes`) |
+| `NPM_GLOBALS` | `0` | `npm update -g` under the user's own Node (`--npm-globals`) |
+| `GO_TOOLCHAIN` | `0` | replace `/usr/local/go` with the latest stable Go (`--go-toolchain`) |
+| `CONTAINERS` | `0` | distrobox/toolbox upgrades, `podman auto-update`, image re-pulls (`--containers`) |
 
 ## Self-update
 
@@ -275,10 +317,15 @@ config parser (including hostile values), argument handling, colour and icon
 selection, the JSON fallback, the GitHub helper against a stubbed `curl`
 (rate limits, null fields, annotated tags), the step runner and exit codes,
 the tool identification guard (a hanging `kilo` editor, a `pi` that is not
-Pi), nvm against a stubbed `nvm.sh`, and self-update against a local bare
-repository. `tests/containers.sh` runs `--list`, `--dry-run`, a real `--yes`
-run (after downgrading one package so there is something to upgrade), the
-same as a non-root user with `sudo`, an unreachable apt source (a warning,
+Pi), nvm against a stubbed `nvm.sh`, every tool module against fake
+binaries (detect, skip, dry run, update, failure, distro-owned copies; the
+verified-download modules against the stubbed `curl` with and without a
+published checksum; the git-based ones against local bare repositories),
+and self-update against a local bare repository. `tests/containers.sh` runs
+`--list`, `--dry-run`, a real `--yes` run (after downgrading one package so
+there is something to upgrade), the same as a non-root user with `sudo`
+(including fake `rustup`, `gh` and `brew` that must run as that user, and a
+dry run that must leave them alone), an unreachable apt source (a warning,
 not a failure), a stand-alone `docker-compose` updated from the real GitHub
 release (downloaded, sha256-verified, `install -m 0755`), and the `kilo`
 guard inside Ubuntu, Debian, Fedora, Rocky,
@@ -328,6 +375,10 @@ be trusted on any distribution:
 * pip-installed tools through `pipx`/`uv` rather than `pip install --upgrade`
   into the system interpreter; AWS CLI v2 is left to its own installer.
 * Vendor `curl | sh` installers (Ollama, AnythingLLM) are opt-in.
+* More of the developer toolbox: rustup and cargo, the Azure CLI and Bicep,
+  cloudflared, gh extensions, Homebrew on Linux, Oh My Zsh/Oh My Bash and
+  TPM, mise and asdf; and, behind flags, Neovim plugins, mise/asdf runtimes,
+  npm globals, the Go toolchain and containers.
 * Config file, environment and flags; `--self-update`; `install.sh`; unit and
   container tests; CI.
 

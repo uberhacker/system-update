@@ -234,14 +234,60 @@ if phase_enabled nonroot; then
     printf 'export PATH="$HOME/.local/bin:$PATH"\n' >> /home/tester/.profile
     printf 'export PATH="$HOME/.local/bin:$PATH"\n' >> /home/tester/.bash_profile
     chown tester /home/tester/.profile /home/tester/.bash_profile
-    out=$(run_as_tester sudo -n "$SU" --only kilo 2>&1); rc=$?
+    # Fake rustup, gh (with one extension) and brew: they must run as tester
+    # too, and a dry run must not touch them. Each writes a marker when it
+    # is asked to change something.
+    cat > /home/tester/.local/bin/rustup <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  --version) echo "rustup 1.27.1 (2024-10-01)" ;;
+  check) echo "stable-x86_64-unknown-linux-gnu - Up to date : 1.82.0" ;;
+  self) echo "rustup self update as $(id -un)"; touch "$HOME/.rustup-touched" ;;
+  update) echo "  stable-x86_64-unknown-linux-gnu unchanged - rustc 1.82.0"; touch "$HOME/.rustup-touched" ;;
+esac
+EOF
+    cat > /home/tester/.local/bin/gh <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  'extension list') printf 'gh foo\towner/gh-foo\tv1.0.0\n' ;;
+  'extension upgrade --all --dry-run') echo "[foo]: would have upgraded from v1.0.0 to v1.0.1" ;;
+  'extension upgrade --all') echo "[foo]: upgraded from v1.0.0 to v1.0.1 as $(id -un)"; touch "$HOME/.gh-touched" ;;
+esac
+EOF
+    cat > /home/tester/.local/bin/brew <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  update) echo "Already up-to-date." ;;
+  outdated) echo foo ;;
+  upgrade) echo "brew upgrade as $(id -un)"; touch "$HOME/.brew-touched" ;;
+  autoremove) ;;
+esac
+EOF
+    chmod 0755 /home/tester/.local/bin/rustup /home/tester/.local/bin/gh /home/tester/.local/bin/brew
+    mkdir -p /home/tester/.local/share/gh/extensions/gh-foo
+    chown -R tester /home/tester/.local
+    out=$(run_as_tester sudo -n "$SU" --only kilo,rustup,gh-extensions,brew 2>&1); rc=$?
     printf '%s\n' "$out"
-    if [ "$rc" -eq 0 ] && grep -q 'running user-level tools as tester' <<< "$out" && grep -q 'upgraded as tester' <<< "$out"; then
-      result nonroot-sudo-tools pass "user tools delegated to SUDO_USER"
+    if [ "$rc" -eq 0 ] && grep -q 'running user-level tools as tester' <<< "$out" && grep -q 'upgraded as tester' <<< "$out" \
+       && grep -q 'rustup self update as tester' <<< "$out" && grep -q 'upgraded from v1.0.0 to v1.0.1 as tester' <<< "$out" \
+       && grep -q 'brew upgrade as tester' <<< "$out" \
+       && [ "$(stat -c %U /home/tester/.rustup-touched /home/tester/.gh-touched /home/tester/.brew-touched | sort -u)" = tester ]; then
+      result nonroot-sudo-tools pass "user tools (kilo, rustup, gh extensions, brew) delegated to SUDO_USER"
     else
       result nonroot-sudo-tools fail "exit $rc"
     fi
-    rm -f /home/tester/.local/bin/kilo
+    rm -f /home/tester/.rustup-touched /home/tester/.gh-touched /home/tester/.brew-touched
+    out=$(run_as_tester env HOME=/home/tester PATH="/home/tester/.local/bin:$PATH" "$SU" --dry-run --only kilo,rustup,gh-extensions,brew 2>&1); rc=$?
+    printf '%s\n' "$out" | tail -n 12
+    if [ "$rc" -eq 0 ] && grep -q 'Summary (dry run)' <<< "$out" && grep -qE 'dry-run +rustup ' <<< "$out" \
+       && grep -qE 'dry-run +gh-extensions .*1 would be upgraded' <<< "$out" && grep -qE 'dry-run +brew .*1 outdated: foo' <<< "$out" \
+       && [ ! -e /home/tester/.rustup-touched ] && [ ! -e /home/tester/.gh-touched ] && [ ! -e /home/tester/.brew-touched ]; then
+      result nonroot-tools-dry pass "dry run of the user tools changed nothing"
+    else
+      result nonroot-tools-dry fail "exit $rc"
+    fi
+    rm -f /home/tester/.local/bin/kilo /home/tester/.local/bin/rustup /home/tester/.local/bin/gh /home/tester/.local/bin/brew
+    rm -rf /home/tester/.local/share/gh
   else
     result nonroot skip "could not install sudo or create a user"
   fi
