@@ -72,7 +72,7 @@ tool_codium_update() {
   url=$(gh_release_asset_url VSCodium/vscodium "$latest" "$asset")
   download "$url" "$tmp/$asset" || { step_fail "download failed"; return 0; }
   download "$url.sha256" "$tmp/$asset.sha256" || { step_fail "could not download $asset.sha256; refusing to install an unverified package"; return 0; }
-  sum=$(head -n1 "$tmp/$asset.sha256" | awk '{print $1}')
+  read -r sum _ < "$tmp/$asset.sha256" || sum=""
   verify_sha256 "$tmp/$asset" "$sum" || { step_fail "checksum verification failed; nothing installed"; return 0; }
   case "$kind" in
     deb) SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT do_root "${APT_ENV[@]}" apt-get -y -q install "$tmp/$asset" || { step_fail "apt-get install failed"; return 0; } ;;

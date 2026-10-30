@@ -11,8 +11,12 @@ zypper_refresh() {
 
 # zypper_count LOGFILE: sum of "The following N packages are going to be upgraded/installed".
 zypper_count() {
-  grep -E -o 'The following [0-9]+ (NEW )?packages? (are|is) going to be (upgraded|installed)' "$1" \
-    | grep -E -o '[0-9]+' | awk '{s+=$1} END {print s+0}'
+  local n sum=0
+  while read -r n; do
+    sum=$((sum + n))
+  done < <(grep -E -o 'The following [0-9]+ (NEW )?packages? (are|is) going to be (upgraded|installed)' "$1" \
+    | grep -E -o '[0-9]+')
+  printf '%s\n' "$sum"
 }
 
 pkg_zypper_update() {

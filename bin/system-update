@@ -15,6 +15,17 @@ if [ -z "${BASH_VERSINFO:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
   exit 1
 fi
 
+# The core relies on a few external commands (coreutils, grep, sed); say
+# which one is missing up front instead of failing deep inside a step.
+# Nothing else is assumed: minimal images lack awk, diff, curl and jq.
+for _su_cmd in timeout mktemp install readlink grep sed sort; do
+  if ! command -v "$_su_cmd" >/dev/null 2>&1; then
+    echo "system-update needs '$_su_cmd' on PATH (GNU coreutils, grep and sed are required)" >&2
+    exit 1
+  fi
+done
+unset _su_cmd
+
 # su_resolve_root: directory above bin/, following symlinks to this file.
 su_resolve_root() {
   local src="${BASH_SOURCE[0]}" dir

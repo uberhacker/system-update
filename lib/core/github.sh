@@ -63,8 +63,9 @@ gh_api() {
     -H 'X-GitHub-Api-Version: 2022-11-28' \
     "${auth[@]}" \
     -D "$hdr" -o "$out" "${SU_GITHUB_API}/${path}" </dev/null || rc=$?
-  # Header lines end in CRLF; drop the CR before comparing.
-  status=$(grep -i '^HTTP/' "$hdr" 2>/dev/null | tail -n1 | tr -d '\r' | awk '{print $2}')
+  # Header lines end in CRLF; drop the CR before comparing. (No awk: some
+  # minimal images do not ship it.)
+  read -r _ status _ <<< "$(grep -i '^HTTP/' "$hdr" 2>/dev/null | tail -n1 | tr -d '\r')"
   GH_LAST_STATUS="${status:-}"
   if [ "$rc" -ne 0 ]; then
     case "$status" in

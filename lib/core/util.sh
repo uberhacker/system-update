@@ -243,8 +243,16 @@ verify_sha256() {
 # checksum_for CHECKSUMS_FILE NAME: extract the sha256 for NAME from a
 # "sha256sum"-style checksums file (hash, whitespace, optional '*', name).
 checksum_for() {
-  local file="$1" name="$2"
-  awk -v n="$name" '{ f=$2; sub(/^\*/, "", f); sub(/^\.\//, "", f); if (f == n) { print $1; exit } }' "$file"
+  local file="$1" name="$2" hash f _rest
+  while read -r hash f _rest; do
+    f=${f#\*}
+    f=${f#./}
+    if [ -n "$hash" ] && [ "$f" = "$name" ]; then
+      printf '%s\n' "$hash"
+      return 0
+    fi
+  done < "$file"
+  return 1
 }
 
 # install_bin SRC DEST: install a verified file as root with mode 0755.
