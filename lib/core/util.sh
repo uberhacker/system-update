@@ -198,6 +198,7 @@ download() {
     file:///*) [ "${SYSTEM_UPDATE_ALLOW_FILE_SOURCE:-0}" = 1 ] || { log_error "refusing non-https download: $url"; return 1; } ;;
     *) log_error "refusing non-https download: $url"; return 1 ;;
   esac
+  has_cmd curl || { log_error "curl is not installed; cannot download $url"; return 1; }
   log_cmd "curl -fsSL $url"
   if ! curl -fsSL --retry 2 --connect-timeout 20 --max-time "${SU_TIMEOUT}" \
       -o "$dest" "$url" </dev/null; then

@@ -49,6 +49,10 @@ gh_api() {
     log_detail "GitHub API: skipping $path (rate limited)"
     return 1
   fi
+  if ! has_cmd curl; then
+    log_detail "GitHub API: curl is not installed; skipping $path"
+    return 1
+  fi
   hdr=$(mktemp "$dir/hdr.XXXXXX") || return 1
   token=$(cfg GITHUB_TOKEN 2>/dev/null || true)
   local -a auth=()

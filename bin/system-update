@@ -196,6 +196,7 @@ main() {
     log_plain "${C_MAGENTA}dry run: nothing will be changed${C_RESET}"
   fi
   [ "$SU_YES" = 1 ] && log_detail "--yes given (package managers never prompt anyway)"
+  has_cmd curl || log_warn "curl is not installed: GitHub release lookups and downloads will be skipped"
 
   # Decide whether sudo credentials are needed up front.
   if ! is_root && has_cmd sudo; then
