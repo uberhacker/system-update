@@ -145,8 +145,9 @@ Or just run it from the checkout: `./system-update`. `install.sh --uninstall`
 removes either installation. The checkout's `.git` directory is copied along
 so that `--self-update` can pull later.
 
-Requirements: bash 4.4 or newer, `curl`, and GNU `coreutils` (`timeout`,
-`install`, `sha256sum`). `jq` is optional.
+Requirements: bash 4.4 or newer and GNU `coreutils` (`timeout`, `install`,
+`sha256sum`). `curl` is needed for GitHub release lookups and downloads
+(without it those steps are skipped with a warning); `jq` is optional.
 
 ## Usage
 
@@ -278,7 +279,9 @@ Pi), nvm against a stubbed `nvm.sh`, and self-update against a local bare
 repository. `tests/containers.sh` runs `--list`, `--dry-run`, a real `--yes`
 run (after downgrading one package so there is something to upgrade), the
 same as a non-root user with `sudo`, an unreachable apt source (a warning,
-not a failure), and the `kilo` guard inside Ubuntu, Debian, Fedora, Rocky,
+not a failure), a stand-alone `docker-compose` updated from the real GitHub
+release (downloaded, sha256-verified, `install -m 0755`), and the `kilo`
+guard inside Ubuntu, Debian, Fedora, Rocky,
 Arch, openSUSE Tumbleweed and Leap, and Alpine. The GitHub Actions workflow
 in `.github/workflows/ci.yml` runs all three.
 

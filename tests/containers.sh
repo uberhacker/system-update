@@ -11,6 +11,8 @@
 #   nonroot   the same as an unprivileged user with sudo (dry run, real run,
 #             and `sudo system-update` delegating user tools to SUDO_USER)
 #   apt-partial  (apt only) an unreachable source is a warning, not ok/failed
+#   compose   a stand-alone docker-compose is updated from the real GitHub
+#             release: download, sha256 verified, install -m 0755, idempotent
 #   kilo      a fake hanging `kilo` editor on PATH is skipped, not run, and a
 #             fake Kilo Code is updated
 #
@@ -39,7 +41,7 @@ while [ $# -gt 0 ]; do
     --restricted) RESTRICTED=1 ;;
     --keep-going) KEEP_GOING=1 ;;
     --fail-fast) KEEP_GOING=0 ;;
-    -h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) IMAGES+=("$1") ;;
   esac
   shift

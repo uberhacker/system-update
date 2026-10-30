@@ -14,12 +14,17 @@ result() { printf 'RESULT %s %s %s\n' "$1" "$2" "${3:-}"; }
 phase_enabled() { [ -z "${SU_TEST_PHASES:-}" ] || [[ ",$SU_TEST_PHASES," == *",$1,"* ]]; }
 section() { printf '\n##### %s #####\n' "$*"; }
 
-# Trust the sandbox proxy CA when the driver mounted one.
-if [ -f /ca.crt ]; then
+# Trust the sandbox proxy CA when the driver mounted one (again after a
+# package install, which may regenerate the system bundle).
+trust_proxy_ca() {
+  [ -f /ca.crt ] || return 0
+  local f
   for f in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/ca-bundle.pem /etc/ssl/cert.pem; do
     [ -e "$f" ] && cp /ca.crt "$(readlink -f "$f")" 2>/dev/null
   done
-fi
+  return 0
+}
+trust_proxy_ca
 
 ID=""; ID_LIKE=""
 # shellcheck disable=SC1091
@@ -53,7 +58,7 @@ snapshot() {
 # install_pkgs PKG...: with the distro's manager (for sudo/shadow in the nonroot phase).
 install_pkgs() {
   case "$FAM" in
-    apt) DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$@" ;;
+    apt) apt-get update -q >/dev/null 2>&1; DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$@" ;;
     dnf) (command -v dnf5 >/dev/null && dnf5 -y install "$@") || dnf -y install "$@" || yum -y install "$@" ;;
     pacman) pacman -S --noconfirm --needed "$@" ;;
     zypper) zypper --non-interactive install "$@" ;;
@@ -107,7 +112,7 @@ stage_upgrade() {
       for pkg in tar gzip grep sed bash coreutils tzdata; do
         dpkg-query -W -f '${db:Status-Status}' "$pkg" 2>/dev/null | grep -qx installed || continue
         cur=$(dpkg-query -W -f '${Version}' "$pkg" 2>/dev/null) || continue
-        ver=$(apt-cache madison "$pkg" 2>/dev/null | awk '{print $3}' | sort -u | sort -V | head -n1)
+        ver=$(apt-cache madison "$pkg" 2>/dev/null | cut -d'|' -f2 | tr -d ' ' | sort -u | sort -V | head -n1)
         { [ -n "$ver" ] && [ "$ver" != "$cur" ]; } || continue
         if DEBIAN_FRONTEND=noninteractive apt-get install -y -q --allow-downgrades "$pkg=$ver" >/dev/null 2>&1; then
           echo "staged: $pkg downgraded $cur -> $ver"
@@ -255,6 +260,55 @@ if phase_enabled apt-partial && [ "$FAM" = apt ]; then
     result apt-partial pass "unreachable source reported as a warning, exit 0"
   else
     result apt-partial fail "exit $rc: $(summary_line apt "$out")"
+  fi
+fi
+
+# ---------------------------------------------------------------- docker-compose
+# A stand-alone docker-compose binary is updated from the GitHub release:
+# download, sha256 against the release's checksums.txt, install -m 0755.
+# The release lookup goes to a local stub of the API (SU_GITHUB_API, a
+# documented test hook) so the phase does not depend on api.github.com's
+# anonymous rate limit; the download and the checksum file are the real ones.
+if phase_enabled compose; then
+  section "docker-compose: verified download of a pinned release"
+  COMPOSE_TAG=v2.40.3
+  if ! command -v curl >/dev/null 2>&1; then
+    install_pkgs curl ca-certificates >/dev/null 2>&1
+    trust_proxy_ca
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    result compose skip "curl not available in this image"
+  else
+    mkdir -p /tmp/ghapi/repos/docker/compose/releases
+    printf '{"tag_name":"%s","name":"%s"}\n' "$COMPOSE_TAG" "$COMPOSE_TAG" > /tmp/ghapi/repos/docker/compose/releases/latest
+    printf '#!/bin/sh\necho "Docker Compose version v2.24.0"\n' > /usr/local/bin/docker-compose
+    chmod 0755 /usr/local/bin/docker-compose
+    out=$(SU_GITHUB_API=file:///tmp/ghapi "$SU" --only docker-compose --dry-run 2>&1); rc=$?
+    if [ "$rc" -eq 0 ] && grep -q 'would download docker-compose-linux' <<< "$out" && [ "$(/usr/local/bin/docker-compose --version)" = "Docker Compose version v2.24.0" ]; then
+      result compose-dry pass "dry run left the binary alone"
+    else
+      printf '%s\n' "$out"
+      result compose-dry fail "exit $rc"
+    fi
+    out=$(SU_GITHUB_API=file:///tmp/ghapi "$SU" --only docker-compose -v 2>&1); rc=$?
+    printf '%s\n' "$out" | grep -v 'skipping reboot-check' | tail -n 12
+    ver=$(/usr/local/bin/docker-compose version 2>&1 | head -n1)
+    mode=$(stat -c %a /usr/local/bin/docker-compose 2>/dev/null)
+    if [ "$rc" -eq 0 ] && grep -q 'checksum ok' <<< "$out" \
+        && grep -qE "updated +docker-compose +2\.24\.0 -> ${COMPOSE_TAG#v}" <<< "$out" \
+        && [[ "$ver" == *"$COMPOSE_TAG"* ]] && [ "$mode" = 755 ]; then
+      result compose pass "2.24.0 -> ${COMPOSE_TAG#v}, sha256 verified, mode $mode"
+    else
+      result compose fail "exit $rc: $(summary_line docker-compose "$out") version='$ver' mode=$mode"
+    fi
+    out=$(SU_GITHUB_API=file:///tmp/ghapi "$SU" --only docker-compose 2>&1); rc=$?
+    if [ "$rc" -eq 0 ] && grep -qE "ok +docker-compose +up to date" <<< "$out"; then
+      result compose-again pass "second run reports up to date"
+    else
+      printf '%s\n' "$out" | tail -n 5
+      result compose-again fail "exit $rc"
+    fi
+    rm -f /usr/local/bin/docker-compose
   fi
 fi
 
