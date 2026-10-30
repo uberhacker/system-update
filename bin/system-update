@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+# system-update - update the OS packages and every supported third-party tool.
+#
+# Entry point. Resolves its own location through symlinks, loads the modules
+# from ../lib and runs the steps. Requires bash 4.4 or newer.
+#
+# Based on Ed Reel's system-update (https://github.com/uberhacker/system-update).
+# Licensed under the GNU GPL v3; see LICENSE.
+
+set -uo pipefail
+
+if [ -z "${BASH_VERSINFO:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
+   { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 4 ]; }; then
+  echo "system-update needs bash 4.4 or newer (found ${BASH_VERSION:-unknown})" >&2
+  exit 1
+fi
+
+# su_resolve_root: directory above bin/, following symlinks to this file.
+su_resolve_root() {
+  local src="${BASH_SOURCE[0]}" dir
+  while [ -L "$src" ]; do
+    dir=$(cd -P "$(dirname "$src")" && pwd)
+    src=$(readlink "$src")
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  cd -P "$(dirname "$src")/.." && pwd
+}
+SU_ROOT=$(su_resolve_root)
+export SU_ROOT
+SU_BIN="$SU_ROOT/bin/system-update"
+
+# shellcheck source=lib/core/log.sh
+source "$SU_ROOT/lib/core/log.sh"
+# shellcheck source=lib/core/util.sh
+source "$SU_ROOT/lib/core/util.sh"
+# shellcheck source=lib/core/config.sh
+source "$SU_ROOT/lib/core/config.sh"
+# shellcheck source=lib/core/args.sh
+source "$SU_ROOT/lib/core/args.sh"
+# shellcheck source=lib/core/os.sh
+source "$SU_ROOT/lib/core/os.sh"
+# shellcheck source=lib/core/json.sh
+source "$SU_ROOT/lib/core/json.sh"
+# shellcheck source=lib/core/github.sh
+source "$SU_ROOT/lib/core/github.sh"
+# shellcheck source=lib/core/runner.sh
+source "$SU_ROOT/lib/core/runner.sh"
+# shellcheck source=lib/core/pkg.sh
+source "$SU_ROOT/lib/core/pkg.sh"
+# shellcheck source=lib/core/tools.sh
+source "$SU_ROOT/lib/core/tools.sh"
+# shellcheck source=lib/core/selfupdate.sh
+source "$SU_ROOT/lib/core/selfupdate.sh"
+# shellcheck source=lib/pkg/apt.sh
+source "$SU_ROOT/lib/pkg/apt.sh"
+# shellcheck source=lib/pkg/dnf.sh
+source "$SU_ROOT/lib/pkg/dnf.sh"
+# shellcheck source=lib/pkg/zypper.sh
+source "$SU_ROOT/lib/pkg/zypper.sh"
+# shellcheck source=lib/pkg/pacman.sh
+source "$SU_ROOT/lib/pkg/pacman.sh"
+# shellcheck source=lib/pkg/apk.sh
+source "$SU_ROOT/lib/pkg/apk.sh"
+# shellcheck source=lib/pkg/xbps.sh
+source "$SU_ROOT/lib/pkg/xbps.sh"
+# shellcheck source=lib/pkg/emerge.sh
+source "$SU_ROOT/lib/pkg/emerge.sh"
+# shellcheck source=lib/pkg/nix.sh
+source "$SU_ROOT/lib/pkg/nix.sh"
+# shellcheck source=lib/pkg/rpm-ostree.sh
+source "$SU_ROOT/lib/pkg/rpm-ostree.sh"
+# shellcheck source=lib/pkg/flatpak.sh
+source "$SU_ROOT/lib/pkg/flatpak.sh"
+# shellcheck source=lib/pkg/snap.sh
+source "$SU_ROOT/lib/pkg/snap.sh"
+# shellcheck source=lib/pkg/fwupd.sh
+source "$SU_ROOT/lib/pkg/fwupd.sh"
+tools_load
+
+# version_string: "system-update X.Y.Z (git abcdef1)"
+version_string() {
+  local v commit=""
+  v=$(tr -d '[:space:]' < "$SU_ROOT/VERSION" 2>/dev/null || echo unknown)
+  if [ -e "$SU_ROOT/.git" ] && has_cmd git; then
+    commit=$(git -C "$SU_ROOT" rev-parse --short HEAD 2>/dev/null || true)
+  fi
+  printf 'system-update %s%s\n' "$v" "${commit:+ (git $commit)}"
+}
+
+# list_main: --list output.
+list_main() {
+  local name scope method bin key
+  log_plain "$(version_string)"
+  log_plain "Distro:          $SU_OS_PRETTY"
+  log_plain "os-release:      ID=${SU_OS_ID:-?}${SU_OS_ID_LIKE:+ ID_LIKE=$SU_OS_ID_LIKE}${SU_OS_VARIANT_ID:+ VARIANT_ID=$SU_OS_VARIANT_ID}"
+  log_plain "Package manager: $SU_PKG$([ "$SU_PKG" = zypper ] && printf ' (%s)' "$SU_ZYPPER_MODE")$(pkg_supported || printf ' (not supported)')"
+  log_plain "Running as:      $SU_CUR_USER$([ "$SU_USER" != "$SU_CUR_USER" ] && printf ' (user-level tools as %s)' "$SU_USER")"
+  log_plain "Extras:          flatpak=$(has_cmd flatpak && echo yes || echo no) snap=$(has_cmd snap && echo yes || echo no) fwupd=$(has_cmd fwupdmgr && echo yes || echo no) jq=$(json_has_jq && echo yes || echo no)"
+  log_plain ""
+  log_plain "Tools found (${#SU_TOOLS[@]}):"
+  if [ ${#SU_TOOLS[@]} -eq 0 ]; then
+    log_plain "  (none)"
+  fi
+  for name in "${SU_TOOLS[@]-}"; do
+    [ -n "$name" ] || continue
+    bin="${SU_TOOL_BIN[$name]}"
+    scope=$(tool_scope "$name")
+    method=""
+    if [ -x "$bin" ] && [ ! -d "$bin" ]; then method=$(install_method "$bin"); fi
+    log_plain "$(printf '  %-16s %-7s %s%s%s' "$name" "$scope" "$bin" "${method:+  [$method]}" "$(step_enabled tools "$name" || printf '  (disabled by --only/--skip)')")"
+  done
+  log_plain ""
+  log_plain "Settings (non-default):"
+  for key in $(printf '%s\n' "${!SU_CFG[@]}" | sort); do
+    [ "${SU_CFG_SOURCE[$key]}" = default ] && continue
+    if [ "$key" = GITHUB_TOKEN ]; then
+      log_plain "  $key=<set> (${SU_CFG_SOURCE[$key]})"
+    else
+      log_plain "  $key=${SU_CFG[$key]} (${SU_CFG_SOURCE[$key]})"
+    fi
+  done
+  log_plain "  user config: $(config_user_file)$([ -r "$(config_user_file)" ] || printf ' (absent)')"
+  log_plain "  system config: /etc/system-update.conf$([ -r /etc/system-update.conf ] || printf ' (absent)')"
+}
+
+# run_user_tools_as_sudo_user: we are root via sudo; run the user-level
+# tools in a child process as SUDO_USER with that user's login environment.
+run_user_tools_as_sudo_user() {
+  local results args=() rc=0 color=never
+  results=$(tmp_file) || return 1
+  chown "$SU_USER" "$results" 2>/dev/null || true
+  [ "$SU_USE_COLOR" = 1 ] && color=always
+  args=(--_user-tools --color "$color" --timeout "$SU_TIMEOUT")
+  [ "$SU_DRY_RUN" = 1 ] && args+=(--dry-run)
+  [ "$SU_VERBOSE" = 1 ] && args+=(--verbose)
+  [ "$SU_QUIET" = 1 ] && args+=(--quiet)
+  [ -n "$SU_ONLY" ] && args+=(--only "$SU_ONLY")
+  [ -n "$SU_SKIP" ] && args+=(--skip "$SU_SKIP")
+  [ -n "$SU_CONFIG_FILE" ] && args+=(--config "$SU_CONFIG_FILE")
+  cfg_bool PRUNE_NODE && args+=(--prune-node)
+  cfg_bool ALLOW_UNVERIFIED_INSTALLERS && args+=(--allow-unverified-installers)
+
+  log_info "running user-level tools as $SU_USER"
+  local -a envp=(env -i "HOME=$SU_USER_HOME" "USER=$SU_USER" "LOGNAME=$SU_USER"
+    "PATH=/usr/local/bin:/usr/bin:/bin" "TERM=${TERM:-dumb}" "LANG=${LANG:-C.UTF-8}"
+    "SU_RESULTS_OUT=$results" "GITHUB_TOKEN=$(cfg GITHUB_TOKEN)" "NO_COLOR=${NO_COLOR:-}"
+    "SU_GITHUB_API=$SU_GITHUB_API")
+  [ -n "${LC_ALL:-}" ] && envp+=("LC_ALL=$LC_ALL")
+  # shellcheck disable=SC2016  # $0/$@ are expanded by the child bash on purpose
+  if has_cmd runuser; then
+    runuser -u "$SU_USER" -- "${envp[@]}" bash -lc 'exec "$0" "$@"' "$SU_BIN" "${args[@]}" </dev/null || rc=$?
+  else
+    sudo -n -u "$SU_USER" -H -- "${envp[@]}" bash -lc 'exec "$0" "$@"' "$SU_BIN" "${args[@]}" </dev/null || rc=$?
+  fi
+  runner_import_file "$results"
+  if [ "$rc" -ne 0 ] && [ ! -s "$results" ]; then
+    runner_record "user-tools" failed "child process for $SU_USER exited with $rc"
+  fi
+  return 0
+}
+
+main() {
+  local rc=0 need_sudo=0
+
+  user_init
+  if ! args_parse "$@"; then
+    log_plain ""
+    usage >&2
+    exit 2
+  fi
+  if [ "$SU_ARG_HELP" = 1 ]; then usage; exit 0; fi
+  config_load
+  args_apply || exit 2
+  if [ "$SU_ARG_VERSION" = 1 ]; then version_string; exit 0; fi
+  gh_init || exit 1
+
+  os_detect
+
+  if [ "$SU_ARG_SELF_UPDATE" = 1 ]; then
+    selfupdate_main || exit 1
+    exit 0
+  fi
+
+  if [ "$SU_ARG_USER_TOOLS" = 1 ]; then
+    # Child process: only the invoking user's tools, results go to SU_RESULTS_OUT.
+    tools_discover
+    tools_run_all user
+    exit 0
+  fi
+
+  tools_discover
+  if [ "$SU_ARG_LIST" = 1 ]; then list_main; exit 0; fi
+
+  log_plain "${C_BOLD}$(version_string)${C_RESET} on $(os_describe)"
+  if [ "$SU_DRY_RUN" = 1 ]; then
+    log_plain "${C_MAGENTA}dry run: nothing will be changed${C_RESET}"
+  fi
+  [ "$SU_YES" = 1 ] && log_detail "--yes given (package managers never prompt anyway)"
+
+  # Decide whether sudo credentials are needed up front.
+  if ! is_root && has_cmd sudo; then
+    if step_enabled system "$SU_PKG" pkg && pkg_supported; then
+      if [ "$SU_DRY_RUN" != 1 ] || pkg_dry_needs_root; then need_sudo=1; fi
+    fi
+    if [ "$need_sudo" = 1 ]; then
+      sudo_prime || log_warn "sudo is not available; system package steps will be skipped"
+    fi
+  fi
+
+  run_step system "$SU_PKG" pkg_update_step
+  run_step extras flatpak flatpak_step
+  run_step extras snap snap_step
+  run_step extras firmware fwupd_step
+
+  if step_enabled tools tools; then
+    json_ensure_jq || true
+  fi
+
+  if is_root && [ "$SU_USER_VIA_SUDO" = 1 ]; then
+    tools_run_all system
+    run_user_tools_as_sudo_user
+  else
+    if is_root && [ ${#SU_TOOLS[@]} -gt 0 ]; then
+      log_warn "running as root without SUDO_USER: user-level tools are root's own installations"
+    fi
+    tools_run_all all
+  fi
+
+  run_step extras reboot-check reboot_check_step
+
+  summary_print || rc=1
+  exit "$rc"
+}
+
+main "$@"
