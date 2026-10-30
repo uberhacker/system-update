@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Stub curl for the unit tests. It serves GitHub API requests from fixture
+# files and mimics `curl -f` behaviour (exit 22, empty body on HTTP errors).
+#
+#   CURL_STUB_DIR   directory with <api path>.json (body) and optional
+#                   <api path>.status files ("403 ratelimit" | "404" | "500")
+#   CURL_STUB_LOG   every request URL is appended here
+set -u
+out=""; hdr=""; url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift ;;
+    -D) hdr="$2"; shift ;;
+    -H|--connect-timeout|--max-time|--retry) shift ;;
+    -*) ;;
+    *) url="$1" ;;
+  esac
+  shift
+done
+[ -n "${CURL_STUB_LOG:-}" ] && printf '%s\n' "$url" >> "$CURL_STUB_LOG"
+path="${url#*://}"; path="${path#*/}"
+path="${path%%\?*}"
+key="${CURL_STUB_DIR:?}/$path"
+status=200; extra=""
+if [ -f "$key.status" ]; then
+  read -r status extra < "$key.status"
+elif [ ! -f "$key.json" ]; then
+  status=404
+fi
+write_hdr() {
+  [ -n "$hdr" ] || return 0
+  printf 'HTTP/2 %s\r\n' "$status" > "$hdr"
+  printf 'content-type: application/json\r\n' >> "$hdr"
+  if [ "$extra" = ratelimit ]; then
+    printf 'x-ratelimit-remaining: 0\r\n' >> "$hdr"
+  else
+    printf 'x-ratelimit-remaining: 55\r\n' >> "$hdr"
+  fi
+  printf '\r\n' >> "$hdr"
+}
+write_hdr
+if [ "$status" = 200 ]; then
+  if [ -n "$out" ]; then cp "$key.json" "$out"; else cat "$key.json"; fi
+  exit 0
+fi
+# curl -f: no body, exit 22
+exit 22

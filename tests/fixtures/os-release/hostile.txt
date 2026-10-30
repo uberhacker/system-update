@@ -1,0 +1,4 @@
+NAME="Evil $(touch /tmp/pwned) `id`"
+ID=ubuntu; rm -rf /
+ID_LIKE="debian"
+PRETTY_NAME="Evil"

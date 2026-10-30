@@ -1,0 +1,3 @@
+NAME=Gentoo
+ID=gentoo
+PRETTY_NAME="Gentoo Linux"
