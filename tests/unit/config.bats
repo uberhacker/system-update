@@ -8,7 +8,7 @@ setup() {
   load_su
   export SU_SYSTEM_CONFIG="$BATS_TEST_TMPDIR/system.conf"
   export SU_CONFIG_FILE="$BATS_TEST_TMPDIR/user.conf"
-  unset TIMEOUT SKIP ONLY SELF_UPDATE_REPO SELF_UPDATE_BRANCH FIRMWARE GITHUB_TOKEN GH_TOKEN COLOR INSTALL_JQ 2>/dev/null || true
+  unset TIMEOUT SKIP ONLY SELF_UPDATE_REPO SELF_UPDATE_BRANCH FIRMWARE GITHUB_TOKEN GH_TOKEN COLOR INSTALL_JQ NVIM_PLUGINS RUNTIMES NPM_GLOBALS GO_TOOLCHAIN CONTAINERS 2>/dev/null || true
 }
 
 @test "defaults" {
@@ -19,6 +19,20 @@ setup() {
   assert_equal 0 "$(cfg FIRMWARE)"
   assert_equal 1 "$(cfg AUTOREMOVE)"
   assert_equal default "${SU_CFG_SOURCE[TIMEOUT]}"
+  # Opt-in steps are off.
+  assert_equal 0 "$(cfg NVIM_PLUGINS)"
+  assert_equal 0 "$(cfg RUNTIMES)"
+  assert_equal 0 "$(cfg NPM_GLOBALS)"
+  assert_equal 0 "$(cfg GO_TOOLCHAIN)"
+  assert_equal 0 "$(cfg CONTAINERS)"
+}
+
+@test "opt-in steps can be turned on in the config file or the environment" {
+  printf 'RUNTIMES=yes\nCONTAINERS=true\n' > "$SU_CONFIG_FILE"
+  config_load
+  cfg_bool RUNTIMES; cfg_bool CONTAINERS; ! cfg_bool GO_TOOLCHAIN
+  GO_TOOLCHAIN=1 NPM_GLOBALS=on config_load
+  cfg_bool GO_TOOLCHAIN; cfg_bool NPM_GLOBALS
 }
 
 @test "user config file is parsed" {

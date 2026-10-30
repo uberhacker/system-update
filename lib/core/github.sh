@@ -136,6 +136,43 @@ gh_release_asset_url() {
   printf 'https://github.com/%s/releases/download/%s/%s\n' "$1" "$2" "$3"
 }
 
+# gh_release_checksum REPO TAG ASSET: the sha256 a project publishes for
+# ASSET of its latest release: a checksums file among the assets, an
+# <asset>.sha256 asset, or a release-notes line naming the asset next to
+# a 64-digit hash. Prints the hash; returns 1 when none is published.
+gh_release_checksum() {
+  local repo="$1" tag="$2" asset="$3" dir key file sum name body line
+  dir=$(gh_cache_dir) || return 1
+  key=$(gh_cache_key "$repo")
+  for name in checksums.txt SHA256SUMS SHA256SUMS.txt sha256sums.txt checksums.sha256 "$asset.sha256" "$asset.sha256sum"; do
+    gh_release_has_asset "$repo" "$name" || continue
+    file="$dir/$key.$(gh_cache_key "$name")"
+    if [ ! -s "$file" ]; then
+      download "$(gh_release_asset_url "$repo" "$tag" "$name")" "$file" || continue
+    fi
+    sum=""
+    case "$name" in
+      "$asset".*) read -r sum _ < "$file" || sum="" ;;
+      *) sum=$(checksum_for "$file" "$asset") || sum="" ;;
+    esac
+    if [[ "${sum,,}" =~ ^[0-9a-f]{64}$ ]]; then
+      log_detail "checksum for $asset from release asset $name"
+      printf '%s\n' "${sum,,}"
+      return 0
+    fi
+  done
+  gh_latest_release_file "$repo" || return 1
+  body=$(json_get .body "$GH_FILE" 2>/dev/null) || return 1
+  while IFS= read -r line; do
+    [[ "$line" =~ (^|[^A-Za-z0-9._-])${asset//./\\.}([^A-Za-z0-9._-]|$) ]] || continue
+    [[ "$line" =~ ([0-9a-fA-F]{64}) ]] || continue
+    log_detail "checksum for $asset from the release notes"
+    printf '%s\n' "${BASH_REMATCH[1],,}"
+    return 0
+  done <<< "$body"
+  return 1
+}
+
 # gh_release_commit REPO: 7-character commit of the latest release tag.
 # Handles both lightweight tags (object.type == commit) and annotated tags,
 # which must be dereferenced through git/tags/<sha> on the same repo.

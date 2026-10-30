@@ -24,6 +24,11 @@ SU_ARG_UNVERIFIED=""
 SU_ARG_PRUNE_NODE=""
 SU_ARG_AUR=""
 SU_ARG_AUTOREMOVE=""
+SU_ARG_NVIM_PLUGINS=""
+SU_ARG_RUNTIMES=""
+SU_ARG_NPM_GLOBALS=""
+SU_ARG_GO_TOOLCHAIN=""
+SU_ARG_CONTAINERS=""
 SU_ARG_USER_TOOLS=0     # internal: child process running user-level tools
 SU_CONFIG_FILE="${SU_CONFIG_FILE:-}"
 
@@ -53,6 +58,12 @@ Options:
                           allow vendor "curl | sh" installers (ollama, AnythingLLM)
       --aur               run an AUR helper (yay/paru) as the invoking user on Arch
       --no-autoremove     do not remove orphaned packages after upgrading
+  Opt-in steps (off by default; config keys NVIM_PLUGINS, RUNTIMES, ...):
+      --nvim-plugins      sync Neovim plugins (lazy.nvim, packer or vim-plug)
+      --runtimes          upgrade runtimes managed by mise/asdf within their configured specs
+      --npm-globals       npm update -g under the user's own Node (nvm); never a system prefix
+      --go-toolchain      replace /usr/local/go with the latest stable Go (sha256-verified)
+      --containers        distrobox/toolbox upgrades, podman auto-update, re-pull container images
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
@@ -60,7 +71,10 @@ Options:
   -h, --help              show this help and exit
 
 Step names for --only/--skip: system (or the package manager name), flatpak,
-snap, firmware, reboot-check, tools, and any tool name shown by --list.
+snap, firmware, reboot-check, tools, and any tool name shown by --list
+(rustup, azure-cli, bicep, cloudflared, gh-extensions, brew, oh-my-zsh,
+oh-my-bash, tpm, cargo, mise, asdf, nvim-plugins, npm-globals, go,
+containers, nvm, composer, docker-compose, ...).
 
 Config: \${XDG_CONFIG_HOME:-~/.config}/system-update/config and
 /etc/system-update.conf (KEY=value). Environment variables override the
@@ -103,6 +117,11 @@ args_parse() {
       --allow-unverified-installers) SU_ARG_UNVERIFIED=1 ;;
       --aur) SU_ARG_AUR=1 ;;
       --no-autoremove) SU_ARG_AUTOREMOVE=0 ;;
+      --nvim-plugins) SU_ARG_NVIM_PLUGINS=1 ;;
+      --runtimes) SU_ARG_RUNTIMES=1 ;;
+      --npm-globals) SU_ARG_NPM_GLOBALS=1 ;;
+      --go-toolchain|--go) SU_ARG_GO_TOOLCHAIN=1 ;;
+      --containers) SU_ARG_CONTAINERS=1 ;;
       --self-update) SU_ARG_SELF_UPDATE=1 ;;
       --source) args_need "$opt" "${2:-}" || return 2; SU_ARG_SOURCE="$2"; shift ;;
       --branch) args_need "$opt" "${2:-}" || return 2; SU_ARG_BRANCH="$2"; shift ;;
@@ -147,6 +166,11 @@ args_apply() {
   [ -n "$SU_ARG_UNVERIFIED" ] && config_set ALLOW_UNVERIFIED_INSTALLERS "$SU_ARG_UNVERIFIED" flag
   [ -n "$SU_ARG_AUR" ] && config_set AUR_HELPER "$SU_ARG_AUR" flag
   [ -n "$SU_ARG_AUTOREMOVE" ] && config_set AUTOREMOVE "$SU_ARG_AUTOREMOVE" flag
+  [ -n "$SU_ARG_NVIM_PLUGINS" ] && config_set NVIM_PLUGINS "$SU_ARG_NVIM_PLUGINS" flag
+  [ -n "$SU_ARG_RUNTIMES" ] && config_set RUNTIMES "$SU_ARG_RUNTIMES" flag
+  [ -n "$SU_ARG_NPM_GLOBALS" ] && config_set NPM_GLOBALS "$SU_ARG_NPM_GLOBALS" flag
+  [ -n "$SU_ARG_GO_TOOLCHAIN" ] && config_set GO_TOOLCHAIN "$SU_ARG_GO_TOOLCHAIN" flag
+  [ -n "$SU_ARG_CONTAINERS" ] && config_set CONTAINERS "$SU_ARG_CONTAINERS" flag
   [ -n "$SU_ARG_SOURCE" ] && { config_set SELF_UPDATE_REPO "$SU_ARG_SOURCE" flag || return 2; }
   [ -n "$SU_ARG_BRANCH" ] && { config_set SELF_UPDATE_BRANCH "$SU_ARG_BRANCH" flag || return 2; }
 

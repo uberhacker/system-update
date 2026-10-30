@@ -67,7 +67,7 @@ tool_docker_compose_update() {
   sum=$(checksum_for "$tmp/checksums.txt" "$asset")
   verify_sha256 "$tmp/$asset" "$sum" || { step_fail "checksum verification failed; $bin left untouched"; return 0; }
   dir=$(dirname "$real")
-  if [ -w "$dir" ] && [ -w "$real" ]; then
+  if user_is_current && [ -w "$dir" ] && [ -w "$real" ]; then
     do_user install -m 0755 "$tmp/$asset" "$real" || { step_fail "install failed"; return 0; }
   else
     install_bin "$tmp/$asset" "$real" || { step_fail "install failed"; return 0; }

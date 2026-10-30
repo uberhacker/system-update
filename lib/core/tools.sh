@@ -42,6 +42,7 @@ tool_fn() {
 tools_discover() {
   local f name fn out
   SU_TOOLS=()
+  SU_TOOL_BIN=()
   for f in "$SU_ROOT"/lib/tools/*.sh; do
     [ -r "$f" ] || continue
     name=$(basename "$f" .sh)
@@ -105,12 +106,14 @@ install_method() {
 # -k) means it hung.
 tool_probe() {
   local bin="$1"; shift
-  local out rc=0
+  local out rc=0 text
   out=$(mktemp "${TMPDIR:-/tmp}/su-probe.XXXXXX") || return 1
   timeout -k 2 "$SU_PROBE_TIMEOUT" env TERM=dumb NO_COLOR=1 CI=1 "$bin" "$@" </dev/null >"$out" 2>&1 || rc=$?
-  head -c 4096 "$out"
-  echo
+  # Read, remove, then print: a caller that stops reading early (| head -n1)
+  # kills this subshell with SIGPIPE, which must not leave the file behind.
+  text=$(head -c 4096 "$out")
   rm -f -- "$out"
+  printf '%s\n' "$text"
   return "$rc"
 }
 
@@ -124,7 +127,7 @@ version_from_text() {
 # program we think it is; otherwise records a skip and returns 1.
 tool_identify() {
   local name="$1" bin="$2" regex="$3" expect="$4"; shift 4
-  local method pkg out rc
+  local method pkg
   TOOL_PROBE_OUT=""
   method=$(install_method "$bin")
   TOOL_METHOD="$method"
@@ -146,7 +149,18 @@ tool_identify() {
   if [ $# -eq 0 ]; then
     return 0
   fi
-  rc=0
+  tool_probe_check "$name" "$bin" "$regex" "$@"
+}
+
+# tool_probe_check NAME BIN REGEX PROBE_ARGS...: the probe half of
+# tool_identify, for tools that stay ours to update even when a distro
+# package installed them (rustup, mise: the toolchains and plugins they
+# manage live in the user's home). Sets TOOL_PROBE_OUT; records a skip and
+# returns 1 when the probe hangs or its output does not match REGEX.
+tool_probe_check() {
+  local name="$1" bin="$2" regex="$3"; shift 3
+  local out rc=0
+  TOOL_PROBE_OUT=""
   out=$(tool_probe "$bin" "$@") || rc=$?
   if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ] || [ "$rc" -eq 143 ]; then
     step_skip "$bin did not answer '$*' within ${SU_PROBE_TIMEOUT}s; it looks like a different program"
@@ -195,8 +209,16 @@ tool_standard() {
 
   case "${TOOL_METHOD%%:*}" in
     npm|bun|pnpm|uv|pipx) how="${TOOL_METHOD%%:*} (${TOOL_METHOD#*:})" ;;
-    cargo) step_skip "installed with cargo; run 'cargo install' to update"; return 0 ;;
-    brew) step_skip "installed with Homebrew; run 'brew upgrade' to update"; return 0 ;;
+    cargo)
+      # The cargo step (lib/tools/cargo.sh) updates every installed crate
+      # when cargo-update is available; otherwise say what to install.
+      if has_cmd cargo-install-update || [ -x "${CARGO_HOME:-$SU_USER_HOME/.cargo}/bin/cargo-install-update" ]; then
+        step_skip "installed with cargo; updated by the cargo step (cargo install-update -a)"
+      else
+        step_skip "installed with cargo; install cargo-update so the cargo step can update it (or run cargo install $name)"
+      fi
+      return 0 ;;
+    brew) step_skip "installed with Homebrew; updated by the brew step (brew upgrade)"; return 0 ;;
     *) how="self-update" ;;
   esac
   log_info "update method: $how"
@@ -237,6 +259,56 @@ tool_standard() {
   else
     step_ok "update command succeeded"
   fi
+}
+
+# tool_opt_in KEY FLAG: for steps that are off by default. Returns 0 when
+# the user turned the step on; otherwise records a skip that says how.
+tool_opt_in() {
+  local key="$1" flag="$2"
+  cfg_bool "$key" && return 0
+  step_skip "off by default; enable with $flag or $key=1"
+  return 1
+}
+
+# tool_github_binary_update NAME REPO ASSET DEST INSTALLED: the standalone
+# binary pattern (cloudflared, bicep, ...): compare INSTALLED with the
+# latest GitHub release, download ASSET, verify it against the sha256 the
+# project publishes (gh_release_checksum) and `install -m 0755` it over
+# DEST, as the user when DEST is theirs and as root otherwise. Nothing is
+# installed when no checksum is published or it does not match.
+tool_github_binary_update() {
+  local name="$1" repo="$2" asset="$3" dest="$4" installed="$5"
+  local latest tmp sum url real dir
+  [ -n "$installed" ] || { step_skip "could not read the installed version of $name"; return 0; }
+  latest=$(gh_latest_tag "$repo") || { step_skip "latest release unknown (GitHub API unavailable)"; return 0; }
+  log_info "installed version: $installed; latest release: $latest"
+  if ! version_lt "$installed" "$latest"; then
+    step_ok "up to date ($installed)"
+    return 0
+  fi
+  if [ "$SU_DRY_RUN" = 1 ]; then
+    step_dry "would download $asset $latest, verify its sha256 and install it to $dest ($installed -> $(version_norm "$latest"))"
+    return 0
+  fi
+  if ! sum=$(gh_release_checksum "$repo" "$latest" "$asset"); then
+    step_skip "no sha256 published for $asset $latest; refusing to install an unverified binary"
+    return 0
+  fi
+  tmp=$(tmp_dir) || return 1
+  url=$(gh_release_asset_url "$repo" "$latest" "$asset")
+  download "$url" "$tmp/$asset" || { step_fail "download failed"; return 0; }
+  verify_sha256 "$tmp/$asset" "$sum" || { step_fail "checksum verification failed; $dest left untouched"; return 0; }
+  real=$(readlink -f -- "$dest" 2>/dev/null || printf '%s' "$dest")
+  dir=$(dirname "$real")
+  # As the invoking user with write access (a binary in ~/.local/bin):
+  # install directly. Otherwise as root; when we are root acting for
+  # SUDO_USER the system binary is ours to replace, not the user's.
+  if user_is_current && [ -w "$dir" ] && { [ ! -e "$real" ] || [ -w "$real" ]; }; then
+    do_user install -m 0755 "$tmp/$asset" "$real" || { step_fail "install failed"; return 0; }
+  else
+    install_bin "$tmp/$asset" "$real" || { step_fail "install failed"; return 0; }
+  fi
+  step_updated "$installed -> $(version_norm "$latest")"
 }
 
 # phar_update NAME BIN CMD...: update a PHP phar (composer, wp, terminus)

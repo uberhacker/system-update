@@ -115,3 +115,43 @@ calls() { grep -c . "$CURL_STUB_LOG" || true; }
   gh_latest_tag docker/compose >/dev/null
   grep -q '^https://api.github.test/repos/docker/compose/releases/latest$' "$CURL_STUB_LOG"
 }
+
+# --- gh_release_checksum ---------------------------------------------------
+
+SUM_A=1111111111111111111111111111111111111111111111111111111111111111
+SUM_B=2222222222222222222222222222222222222222222222222222222222222222
+
+@test "checksum from a checksums.txt asset" {
+  gh_stub_release example/sums v1.2.3 "notes" tool-linux-amd64 tool-linux-arm64 checksums.txt
+  printf '%s  tool-linux-arm64\n%s  tool-linux-amd64\n' "$SUM_B" "$SUM_A" > "$BATS_TEST_TMPDIR/sums"
+  gh_stub_asset example/sums v1.2.3 checksums.txt "$BATS_TEST_TMPDIR/sums"
+  assert_equal "$SUM_A" "$(gh_release_checksum example/sums v1.2.3 tool-linux-amd64)"
+  assert_equal "$SUM_B" "$(gh_release_checksum example/sums v1.2.3 tool-linux-arm64)"
+}
+
+@test "checksum from an <asset>.sha256 asset" {
+  gh_stub_release example/sums v1.2.3 "notes" tool-linux-amd64 tool-linux-amd64.sha256
+  printf '%s *tool-linux-amd64\n' "${SUM_A^^}" > "$BATS_TEST_TMPDIR/one"
+  gh_stub_asset example/sums v1.2.3 tool-linux-amd64.sha256 "$BATS_TEST_TMPDIR/one"
+  assert_equal "$SUM_A" "$(gh_release_checksum example/sums v1.2.3 tool-linux-amd64)"
+}
+
+@test "checksum from the release notes, matched to the right asset" {
+  gh_stub_release example/sums v1.2.3 "## Checksums\\ntool-linux-arm64: $SUM_B\\ntool-linux-amd64: $SUM_A\\ntool-linux-amd64.deb: $SUM_B\\n" tool-linux-amd64 tool-linux-amd64.deb
+  assert_equal "$SUM_A" "$(gh_release_checksum example/sums v1.2.3 tool-linux-amd64)"
+  assert_equal "$SUM_B" "$(gh_release_checksum example/sums v1.2.3 tool-linux-amd64.deb)"
+}
+
+@test "no published checksum means none, not a guess" {
+  gh_stub_release example/sums v1.2.3 "Fixes a crash in tool-linux-amd64." tool-linux-amd64
+  run gh_release_checksum example/sums v1.2.3 tool-linux-amd64
+  assert_equal 1 "$status"
+  assert_equal "" "$output"
+}
+
+@test "a checksums asset without our file falls through to the notes" {
+  gh_stub_release example/sums v1.2.3 "tool-linux-amd64 $SUM_A" tool-linux-amd64 checksums.txt
+  printf '%s  tool-linux-arm64\n' "$SUM_B" > "$BATS_TEST_TMPDIR/sums"
+  gh_stub_asset example/sums v1.2.3 checksums.txt "$BATS_TEST_TMPDIR/sums"
+  assert_equal "$SUM_A" "$(gh_release_checksum example/sums v1.2.3 tool-linux-amd64)"
+}

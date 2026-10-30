@@ -43,6 +43,16 @@ setup() {
   cfg_bool FIRMWARE; cfg_bool PRUNE_NODE; cfg_bool INSTALL_JQ; cfg_bool ALLOW_UNVERIFIED_INSTALLERS; cfg_bool AUR_HELPER
   ! cfg_bool AUTOREMOVE
 }
+@test "opt-in step flags: --nvim-plugins --runtimes --npm-globals --go-toolchain --containers" {
+  args_parse
+  args_apply
+  ! cfg_bool NVIM_PLUGINS; ! cfg_bool RUNTIMES; ! cfg_bool NPM_GLOBALS; ! cfg_bool GO_TOOLCHAIN; ! cfg_bool CONTAINERS
+  args_parse --nvim-plugins --runtimes --npm-globals --go-toolchain --containers
+  args_apply
+  cfg_bool NVIM_PLUGINS; cfg_bool RUNTIMES; cfg_bool NPM_GLOBALS; cfg_bool GO_TOOLCHAIN; cfg_bool CONTAINERS
+  assert_equal flag "${SU_CFG_SOURCE[CONTAINERS]}"
+}
+@test "--go is an alias for --go-toolchain" { args_parse --go; args_apply; cfg_bool GO_TOOLCHAIN; }
 @test "--source and --branch feed self-update settings" {
   args_parse --source https://github.com/uberhacker/system-update --branch main
   args_apply
@@ -63,6 +73,10 @@ setup() {
   assert_equal 0 "$status"
   assert_contains "$output" "Usage: system-update"
   assert_contains "$output" "--self-update"
+  assert_contains "$output" "Opt-in steps (off by default"
+  assert_contains "$output" "--nvim-plugins"
+  assert_contains "$output" "--go-toolchain"
+  assert_contains "$output" "--containers"
 }
 @test "entry: --version prints the version" {
   run "$REPO_ROOT/bin/system-update" --version

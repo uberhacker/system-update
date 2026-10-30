@@ -150,6 +150,11 @@ run_user_tools_as_sudo_user() {
   [ -n "$SU_CONFIG_FILE" ] && args+=(--config "$SU_CONFIG_FILE")
   cfg_bool PRUNE_NODE && args+=(--prune-node)
   cfg_bool ALLOW_UNVERIFIED_INSTALLERS && args+=(--allow-unverified-installers)
+  cfg_bool AUTOREMOVE || args+=(--no-autoremove)
+  cfg_bool NVIM_PLUGINS && args+=(--nvim-plugins)
+  cfg_bool RUNTIMES && args+=(--runtimes)
+  cfg_bool NPM_GLOBALS && args+=(--npm-globals)
+  cfg_bool CONTAINERS && args+=(--containers)
 
   log_info "running user-level tools as $SU_USER"
   local -a envp=(env -i "HOME=$SU_USER_HOME" "USER=$SU_USER" "LOGNAME=$SU_USER"

@@ -34,6 +34,12 @@ declare -gA SU_CFG_DEFAULT=(
   [PRUNE_NODE]="0"
   [AUR_HELPER]="0"
   [AUTOREMOVE]="1"
+  # Opt-in steps (off by default); the flag of each is its key in lower case.
+  [NVIM_PLUGINS]="0"
+  [RUNTIMES]="0"
+  [NPM_GLOBALS]="0"
+  [GO_TOOLCHAIN]="0"
+  [CONTAINERS]="0"
 )
 declare -gA SU_CFG_TYPE=(
   [SELF_UPDATE_REPO]=url
@@ -50,6 +56,11 @@ declare -gA SU_CFG_TYPE=(
   [PRUNE_NODE]=bool
   [AUR_HELPER]=bool
   [AUTOREMOVE]=bool
+  [NVIM_PLUGINS]=bool
+  [RUNTIMES]=bool
+  [NPM_GLOBALS]=bool
+  [GO_TOOLCHAIN]=bool
+  [CONTAINERS]=bool
 )
 declare -gA SU_CFG=()        # effective values
 declare -gA SU_CFG_SOURCE=() # where each value came from (for --list)

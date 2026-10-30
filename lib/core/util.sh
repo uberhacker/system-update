@@ -317,6 +317,33 @@ arch_name() {
         s390x) echo s390x ;;
         *) echo unknown ;;
       esac ;;
+    go)
+      # go.dev/dl file names: go1.x.linux-<arch>.tar.gz
+      case "$m" in
+        x86_64|amd64) echo amd64 ;;
+        aarch64|arm64) echo arm64 ;;
+        armv7l|armv6l) echo armv6l ;;
+        i686|i386) echo 386 ;;
+        ppc64le) echo ppc64le ;;
+        s390x) echo s390x ;;
+        riscv64) echo riscv64 ;;
+        loongarch64) echo loong64 ;;
+        *) echo unknown ;;
+      esac ;;
+    cloudflared)
+      case "$m" in
+        x86_64|amd64) echo amd64 ;;
+        aarch64|arm64) echo arm64 ;;
+        armv7l|armv6l|armhf) echo arm ;;
+        i686|i386) echo 386 ;;
+        *) echo unknown ;;
+      esac ;;
+    bicep)
+      case "$m" in
+        x86_64|amd64) echo x64 ;;
+        aarch64|arm64) echo arm64 ;;
+        *) echo unknown ;;
+      esac ;;
     *) echo "$m" ;;
   esac
 }
