@@ -18,6 +18,7 @@ s_fail() { step_fail "boom"; }
 s_rc()   { return 3; }
 s_skip() { step_skip "nope"; }
 s_dry()  { step_dry "would do it"; }
+s_warn() { step_warn "reboot required"; }
 s_silent() { :; }
 
 @test "results are recorded in order" {
@@ -59,6 +60,24 @@ s_silent() { :; }
   run summary_print
   assert_equal 0 "$status"
   assert_contains "$output" "1 ok, 0 updated, 0 skipped, 0 failed, 1 dry-run"
+}
+
+@test "a warning is shown in the summary but does not fail the run" {
+  run_step tools a s_ok
+  run_step extras reboot-check s_warn
+  assert_equal "ok warn" "${SU_STEP_RESULTS[*]}"
+  run summary_print
+  assert_equal 0 "$status"
+  assert_contains "$output" "1 ok, 0 updated, 0 skipped, 0 failed, 0 dry-run, 1 warning(s)"
+  assert_contains "$output" "warn     reboot-check reboot required"
+}
+
+@test "imported child results accept warn and reject unknown statuses" {
+  local f="$BATS_TEST_TMPDIR/results"
+  printf 'nvm\tupdated\tv20 -> v22\nx\twarn\tcareful\ny\tbogus\twhat\n' > "$f"
+  runner_import_file "$f"
+  assert_equal "updated warn failed" "${SU_STEP_RESULTS[*]}"
+  assert_contains "${SU_STEP_NOTES[2]}" "unrecognised result"
 }
 
 @test "summary with no steps" {

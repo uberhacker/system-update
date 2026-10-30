@@ -11,17 +11,43 @@ apt_summary() {
   grep -E '^[0-9]+ upgraded, [0-9]+ newly installed' "$1" | tail -n1
 }
 
+# apt_refresh: apt-get update. apt exits 0 even when sources could not be
+# fetched (it keeps the old lists), so the output is inspected as well.
+# Returns 0 when every source was refreshed, 2 when some failed (the old
+# lists are used for those; APT_REFRESH_NOTE says how many), 1 when apt-get
+# update failed or no source at all could be reached.
+APT_REFRESH_NOTE=""
 apt_refresh() {
-  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_root "${APT_ENV[@]}" apt-get -q update
+  local log rc=0 failed
+  APT_REFRESH_NOTE=""
+  log=$(tmp_file) || return 1
+  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root "${APT_ENV[@]}" apt-get -q update || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    APT_REFRESH_NOTE="apt-get update failed ($(rc_note "$rc"))"
+    return 1
+  fi
+  failed=$(count_matching '^(W: |E: )?Failed to fetch ' "$log")
+  [ "$failed" -gt 0 ] || return 0
+  if grep -qE '^(Get|Hit):[0-9]+ ' "$log"; then
+    APT_REFRESH_NOTE="$failed package source(s) could not be refreshed"
+    return 2
+  fi
+  APT_REFRESH_NOTE="no package source could be reached"
+  return 1
 }
 
 pkg_apt_update() {
-  local log summary upgraded rc=0
+  local log summary upgraded rc=0 refresh=0
   log=$(tmp_file) || return 1
 
   if [ "$SU_DRY_RUN" = 1 ]; then
     if is_root || sudo -n true 2>/dev/null; then
-      apt_refresh || log_warn "apt-get update failed; simulating with the cached package lists"
+      apt_refresh || refresh=$?
+      if [ "$refresh" -eq 1 ]; then
+        step_fail "$APT_REFRESH_NOTE"
+        return 0
+      fi
+      [ "$refresh" -eq 2 ] && log_warn "$APT_REFRESH_NOTE; using the cached lists for those"
     else
       log_warn "cannot refresh package lists without a password; simulating with the cached lists"
     fi
@@ -32,11 +58,16 @@ pkg_apt_update() {
     fi
     summary=$(apt_summary "$log")
     upgraded=$(count_matching '^Inst ' "$log")
-    step_dry "${upgraded} package(s) would be upgraded/installed${summary:+ ($summary)}"
+    step_dry "${upgraded} package(s) would be upgraded/installed${summary:+ ($summary)}${APT_REFRESH_NOTE:+; $APT_REFRESH_NOTE}"
     return 0
   fi
 
-  apt_refresh || { step_fail "apt-get update failed"; return 0; }
+  apt_refresh || refresh=$?
+  if [ "$refresh" -eq 1 ]; then
+    step_fail "$APT_REFRESH_NOTE"
+    return 0
+  fi
+  [ "$refresh" -eq 2 ] && log_warn "$APT_REFRESH_NOTE; upgrading with the cached lists for those"
   SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root "${APT_ENV[@]}" apt-get -y -q \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
     dist-upgrade || rc=$?
@@ -53,7 +84,14 @@ pkg_apt_update() {
   fi
   run_root apt-get -q clean || true
   if [ -n "$summary" ] && [[ "$summary" == 0\ upgraded,\ 0\ newly\ installed* ]]; then
-    step_ok "no updates available"
+    summary="no updates available"
+    if [ "$refresh" -eq 2 ]; then
+      step_warn "$summary; $APT_REFRESH_NOTE"
+    else
+      step_ok "$summary"
+    fi
+  elif [ "$refresh" -eq 2 ]; then
+    step_warn "${summary:-$upgraded package(s) processed}; $APT_REFRESH_NOTE"
   else
     step_updated "${summary:-$upgraded package(s) processed}"
   fi

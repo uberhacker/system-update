@@ -3,6 +3,8 @@
 #
 # A step is a function. It reports its outcome by calling one of
 #   step_ok NOTE | step_updated NOTE | step_skip NOTE | step_fail NOTE | step_dry NOTE
+#   step_warn NOTE   (finished, but something needs the user's attention:
+#                     a reboot, a package source that could not be refreshed)
 # If it returns non-zero without reporting, the step is recorded as failed.
 # There is deliberately no `set -e`: every step handles its own errors and a
 # failing step never aborts the run.
@@ -20,6 +22,7 @@ step_updated() { STEP_RESULT=updated; STEP_NOTE="${1:-}"; }
 step_skip()    { STEP_RESULT=skipped; STEP_NOTE="${1:-}"; }
 step_fail()    { STEP_RESULT=failed;  STEP_NOTE="${1:-}"; }
 step_dry()     { STEP_RESULT=dry-run; STEP_NOTE="${1:-}"; }
+step_warn()    { STEP_RESULT=warn;    STEP_NOTE="${1:-}"; }
 
 # step_enabled GROUP NAME [ALIAS...]: honours --only/--skip.
 step_enabled() {
@@ -56,7 +59,7 @@ runner_import_file() {
   while IFS=$'\t' read -r name result note; do
     [ -n "$name" ] || continue
     case "$result" in
-      ok|updated|skipped|failed|dry-run) ;;
+      ok|updated|skipped|failed|dry-run|warn) ;;
       *) result=failed; note="unrecognised result '$result'" ;;
     esac
     SU_STEP_NAMES+=("$name")
@@ -74,6 +77,7 @@ runner_print_result() {
     skipped) log_skipped "$name: ${note:-skipped}" ;;
     failed)  log_error "$name: ${note:-failed}" ;;
     dry-run) log_dry "$name: ${note:-dry run}" ;;
+    warn)    log_warn "$name: ${note:-warning}" ;;
   esac
 }
 
@@ -101,9 +105,9 @@ run_step() {
   return 0
 }
 
-# summary_counts: prints "ok updated skipped failed dry-run" counts.
+# summary_counts: prints "ok updated skipped failed dry-run warn" counts.
 summary_counts() {
-  local r ok=0 up=0 sk=0 fa=0 dr=0
+  local r ok=0 up=0 sk=0 fa=0 dr=0 wa=0
   for r in "${SU_STEP_RESULTS[@]-}"; do
     case "$r" in
       ok) ok=$((ok + 1)) ;;
@@ -111,9 +115,10 @@ summary_counts() {
       skipped) sk=$((sk + 1)) ;;
       failed) fa=$((fa + 1)) ;;
       dry-run) dr=$((dr + 1)) ;;
+      warn) wa=$((wa + 1)) ;;
     esac
   done
-  printf '%s %s %s %s %s\n' "$ok" "$up" "$sk" "$fa" "$dr"
+  printf '%s %s %s %s %s %s\n' "$ok" "$up" "$sk" "$fa" "$dr" "$wa"
 }
 
 # summary_print: table of every step; returns 1 when anything failed.
@@ -137,12 +142,15 @@ summary_print() {
       skipped) icon="$I_SKIPPED"; color="$C_DIM" ;;
       failed)  icon="$I_FAILED";  color="$C_RED" ;;
       dry-run) icon="$I_DRY";     color="$C_MAGENTA" ;;
+      warn)    icon="$I_WARN";    color="$C_YELLOW" ;;
       *)       icon="?";          color="" ;;
     esac
     log_plain "$(printf '  %s%-2s %-8s%s %-*s %s' "$color" "$icon" "$result" "$C_RESET" "$width" "$name" "$note")"
   done
-  read -r c_ok c_up c_sk c_fa c_dr <<< "$(summary_counts)"
+  read -r c_ok c_up c_sk c_fa c_dr c_wa <<< "$(summary_counts)"
   log_plain ""
-  log_plain "  $c_ok ok, $c_up updated, $c_sk skipped, $c_fa failed, $c_dr dry-run"
+  local totals="  $c_ok ok, $c_up updated, $c_sk skipped, $c_fa failed, $c_dr dry-run"
+  [ "$c_wa" -gt 0 ] && totals+=", $c_wa warning(s)"
+  log_plain "$totals"
   [ "$c_fa" -eq 0 ]
 }

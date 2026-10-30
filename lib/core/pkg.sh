@@ -104,14 +104,12 @@ reboot_check_step() {
   if declare -F "$fn" >/dev/null; then
     reason=$("$fn"); rc=$?
     if [ "$rc" -eq 0 ]; then
-      log_warn "reboot required: ${reason:-pending updates}"
-      step_ok "REBOOT REQUIRED: ${reason:-pending updates}"
+      step_warn "reboot required: ${reason:-pending updates}"
       return 0
     fi
   fi
   if reason=$(kernel_reboot_check); then
-    log_warn "reboot required: $reason"
-    step_ok "REBOOT REQUIRED: $reason"
+    step_warn "reboot required: $reason"
     return 0
   fi
   step_ok "no reboot required"
