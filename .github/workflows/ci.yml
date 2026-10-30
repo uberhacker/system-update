@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    name: shellcheck and bash -n
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck
+      - run: tests/lint.sh
+
+  unit:
+    name: unit tests (bats)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch bats-core
+        run: git clone --depth 1 https://github.com/bats-core/bats-core.git tests/vendor/bats-core
+      - run: tests/run.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  containers:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    needs: [lint, unit]
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:24.04
+          - debian:stable
+          - fedora:latest
+          - rockylinux:9
+          - archlinux:latest
+          - opensuse/tumbleweed
+          - opensuse/leap
+          - alpine:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run system-update inside ${{ matrix.image }}
+        run: tests/containers.sh "${{ matrix.image }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROBE_TIMEOUT: "5"
+      - name: Upload container log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-log-${{ strategy.job-index }}
+          path: tests/containers.out/*.log
+          if-no-files-found: ignore
