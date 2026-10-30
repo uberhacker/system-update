@@ -105,6 +105,53 @@ run_step() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# Detailed dry run (--detailed)
+# ---------------------------------------------------------------------------
+# A step that can tell what would change writes one "name|installed|new" line
+# per package to a file and hands it to detail_print. An empty installed
+# version means "would be newly installed", an empty new version "would be
+# removed", and "?" a version that could not be determined.
+
+# detail_enabled: was --detailed given (it always comes with --dry-run)?
+detail_enabled() { [ "${SU_DETAILED:-0}" = 1 ] && [ "$SU_DRY_RUN" = 1 ]; }
+
+# detail_print FILE [WHAT]: sorted, aligned "name  installed -> new" rows.
+# WHAT names the items in the heading (default "package(s)").
+detail_print() {
+  local file="$1" what="${2:-package(s)}" name old new w=0 ow=0 i n
+  local -a names=() olds=() news=()
+  [ -s "$file" ] || return 0
+  while IFS='|' read -r name old new; do
+    [ -n "$name" ] || continue
+    [ -n "$old" ] || old="(new)"
+    if [ -z "$new" ]; then
+      new="(removed)"
+    elif [ "$new" = "$old" ] && [ "$new" != "?" ]; then
+      new="$new (new build)"
+    fi
+    names+=("$name"); olds+=("$old"); news+=("$new")
+    [ ${#name} -gt $w ] && w=${#name}
+    [ ${#old} -gt $ow ] && ow=${#old}
+  done < <(sort -s -u -t'|' -k1,1 "$file")
+  n=${#names[@]}
+  [ "$n" -gt 0 ] || return 0
+  log_dry "$n $what would change:"
+  for ((i = 0; i < n; i++)); do
+    log_change "$(printf '%-*s  %-*s -> %s' "$w" "${names[i]}" "$ow" "${olds[i]}" "${news[i]}")"
+  done
+}
+
+# detail_show WHAT CMD [ARGS...]: with --detailed, run CMD (a producer of
+# "name|installed|new" lines) and print what it found; otherwise do nothing.
+detail_show() {
+  local what="$1" out; shift
+  detail_enabled || return 0
+  out=$(tmp_file) || return 0
+  "$@" > "$out" 2>/dev/null || true
+  detail_print "$out" "$what"
+}
+
 # summary_counts: prints "ok updated skipped failed dry-run warn" counts.
 summary_counts() {
   local r ok=0 up=0 sk=0 fa=0 dr=0 wa=0

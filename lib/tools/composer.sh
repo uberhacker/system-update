@@ -3,6 +3,18 @@
 
 tool_composer_detect() { user_bin composer; }
 
+# composer_outdated: "vendor/package|installed|latest" for the invoking
+# user's direct global requirements (`composer global outdated --direct`,
+# rows like "drush/drush 12.4.3 ! 13.3.3 Drush is ...").
+composer_outdated() {
+  local line re='^([a-z0-9_.-]+/[a-z0-9_.-]+)[[:space:]]+v?([^[:space:]]+)[[:space:]]+[!~=]?[[:space:]]*v?([0-9][^[:space:]]*)'
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] || continue
+    [ "${BASH_REMATCH[2]}" = "${BASH_REMATCH[3]}" ] && continue
+    printf '%s|%s|%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+  done < <(SU_RUN_TIMEOUT=$SU_TIMEOUT run_user composer global outdated --direct --no-interaction --no-ansi 2>/dev/null)
+}
+
 tool_composer_update() {
   local bin="${SU_TOOL_BIN[composer]}" before after rc=0 notes=() failed=0
 
@@ -33,7 +45,12 @@ tool_composer_update() {
   do_user composer clear-cache --no-interaction --no-ansi >/dev/null 2>&1 || true
 
   if [ "$SU_DRY_RUN" = 1 ]; then
-    step_dry "would run self-update, global update${before:+ (installed $before)}"
+    local latest change="${before:+ (installed $before)}"
+    if detail_enabled; then
+      if latest=$(gh_latest_version composer/composer); then change=" (${before:-?} -> $latest)"; fi
+      detail_show "global package(s)" composer_outdated
+    fi
+    step_dry "would run self-update, global update$change"
     return 0
   fi
   if [ "$failed" = 1 ]; then

@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 # lib/pkg/snap.sh - snapd.
 
+# snap_changes REFRESH_LIST: "name|installed|new" from `snap refresh --list`
+# (Name Version Rev ...) joined with the versions from `snap list`.
+snap_changes() {
+  local name ver _rest
+  local -A have=()
+  while read -r name ver _rest; do
+    [ "$name" = Name ] || have[$name]="$ver"
+  done < <(snap list 2>/dev/null)
+  while read -r name ver _rest; do
+    [ -n "$name" ] && [ "$name" != Name ] && [ -n "$ver" ] || continue
+    printf '%s|%s|%s\n' "$name" "${have[$name]:-?}" "$ver"
+  done < "$1"
+}
+
 snap_step() {
   local log rc=0 count
   has_cmd snap || { step_skip "snap not installed"; return 0; }
@@ -17,6 +31,7 @@ snap_step() {
       step_dry "no updates available"
     else
       count=$(grep -c -E '^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[0-9]+' "$log" || true)
+      detail_show "snap(s)" snap_changes "$log"
       step_dry "$count snap(s) would be refreshed"
     fi
     return 0

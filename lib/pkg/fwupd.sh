@@ -5,6 +5,27 @@
 # FIRMWARE=1 (--firmware), because firmware updates may need a reboot and
 # cannot be undone. fwupdmgr exit codes: 0 ok, 1 error, 2 nothing to do.
 
+# fwupd_changes LOGFILE: "device|current|new" from `fwupdmgr get-updates`.
+# A device block carries "Current version:", each release under it
+# "New version:"; the tree characters (│ └─ ├─) are ignored.
+fwupd_changes() {
+  local line header="" device="" current="" value
+  while IFS= read -r line; do
+    line="${line//│/ }"
+    if [[ "$line" =~ [└├]─(.+):[[:space:]]*$ ]]; then
+      header="${BASH_REMATCH[1]}"; continue
+    fi
+    if [[ "$line" =~ ^[[:space:]]*(Current|New)\ version:[[:space:]]+([^[:space:]]+) ]]; then
+      value="${BASH_REMATCH[2]}"
+      if [ "${BASH_REMATCH[1]}" = Current ]; then
+        device="$header"; current="$value"
+      elif [ -n "$device" ]; then
+        printf '%s|%s|%s\n' "$device" "$current" "$value"
+      fi
+    fi
+  done < "$1"
+}
+
 fwupd_step() {
   local log rc=0 count
   has_cmd fwupdmgr || { step_skip "fwupd not installed"; return 0; }
@@ -25,6 +46,7 @@ fwupd_step() {
   esac
   count=$(count_matching '^(│|\|)? *└?─?[^ ].*New version:' "$log")
   [ "${count:-0}" -gt 0 ] || count=$(count_matching 'New version' "$log")
+  detail_show "firmware update(s)" fwupd_changes "$log"
 
   if ! cfg_bool FIRMWARE; then
     log_warn "firmware updates are available; rerun with --firmware to apply them"

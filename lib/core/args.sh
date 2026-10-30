@@ -5,6 +5,7 @@
 # them on top of the config/environment values so that flags always win.
 
 SU_ARG_DRY_RUN=""
+SU_ARG_DETAILED=""
 SU_ARG_YES=""
 SU_ARG_ONLY=""
 SU_ARG_SKIP=""
@@ -29,6 +30,7 @@ SU_ARG_RUNTIMES=""
 SU_ARG_NPM_GLOBALS=""
 SU_ARG_GO_TOOLCHAIN=""
 SU_ARG_CONTAINERS=""
+SU_ARG_LOGGING=""
 SU_ARG_USER_TOOLS=0     # internal: child process running user-level tools
 SU_CONFIG_FILE="${SU_CONFIG_FILE:-}"
 
@@ -41,6 +43,8 @@ that is installed, then print a summary.
 
 Options:
   -n, --dry-run           show what would be updated; change nothing (-d is an alias)
+      --detailed          dry run that also lists each package/tool with its
+                          installed and new version (implies --dry-run)
   -y, --yes               non-interactive (package managers already never prompt)
       --only LIST         run only these steps (comma separated; see --list)
       --skip LIST         skip these steps (comma separated)
@@ -58,6 +62,9 @@ Options:
                           allow vendor "curl | sh" installers (ollama, AnythingLLM)
       --aur               run an AUR helper (yay/paru) as the invoking user on Arch
       --no-autoremove     do not remove orphaned packages after upgrading
+      --log FILE          write this run's log to FILE (default: a new file in
+                          ~/.local/state/system-update or /var/log/system-update)
+      --no-log            do not write a log file for this run
   Opt-in steps (off by default; config keys NVIM_PLUGINS, RUNTIMES, ...):
       --nvim-plugins      sync Neovim plugins (lazy.nvim, packer or vim-plug)
       --runtimes          upgrade runtimes managed by mise/asdf within their configured specs
@@ -101,6 +108,7 @@ args_parse() {
     esac
     case "$opt" in
       -n|-d|--dry-run|--simulate) SU_ARG_DRY_RUN=1 ;;
+      --detailed) SU_ARG_DETAILED=1 ;;
       -y|--yes) SU_ARG_YES=1 ;;
       --only) args_need "$opt" "${2:-}" || return 2; SU_ARG_ONLY="$2"; shift ;;
       --skip) args_need "$opt" "${2:-}" || return 2; SU_ARG_SKIP="$2"; shift ;;
@@ -122,6 +130,8 @@ args_parse() {
       --npm-globals) SU_ARG_NPM_GLOBALS=1 ;;
       --go-toolchain|--go) SU_ARG_GO_TOOLCHAIN=1 ;;
       --containers) SU_ARG_CONTAINERS=1 ;;
+      --log) args_need "$opt" "${2:-}" || return 2; SU_LOG_PATH="$2"; SU_ARG_LOGGING=1; shift ;;
+      --no-log) SU_ARG_LOGGING=0; SU_LOG_PATH="" ;;
       --self-update) SU_ARG_SELF_UPDATE=1 ;;
       --source) args_need "$opt" "${2:-}" || return 2; SU_ARG_SOURCE="$2"; shift ;;
       --branch) args_need "$opt" "${2:-}" || return 2; SU_ARG_BRANCH="$2"; shift ;;
@@ -171,10 +181,14 @@ args_apply() {
   [ -n "$SU_ARG_NPM_GLOBALS" ] && config_set NPM_GLOBALS "$SU_ARG_NPM_GLOBALS" flag
   [ -n "$SU_ARG_GO_TOOLCHAIN" ] && config_set GO_TOOLCHAIN "$SU_ARG_GO_TOOLCHAIN" flag
   [ -n "$SU_ARG_CONTAINERS" ] && config_set CONTAINERS "$SU_ARG_CONTAINERS" flag
+  [ -n "$SU_ARG_LOGGING" ] && config_set LOGGING "$SU_ARG_LOGGING" flag
   [ -n "$SU_ARG_SOURCE" ] && { config_set SELF_UPDATE_REPO "$SU_ARG_SOURCE" flag || return 2; }
   [ -n "$SU_ARG_BRANCH" ] && { config_set SELF_UPDATE_BRANCH "$SU_ARG_BRANCH" flag || return 2; }
 
   SU_DRY_RUN="${SU_ARG_DRY_RUN:-${SU_DRY_RUN:-0}}"
+  SU_DETAILED="${SU_ARG_DETAILED:-${SU_DETAILED:-0}}"
+  # --detailed is a dry run that lists versions; it never changes anything.
+  [ "$SU_DETAILED" = 1 ] && SU_DRY_RUN=1
   SU_YES="${SU_ARG_YES:-0}"
   SU_VERBOSE="${SU_ARG_VERBOSE:-${SU_VERBOSE:-0}}"
   SU_QUIET="${SU_ARG_QUIET:-${SU_QUIET:-0}}"
@@ -186,7 +200,7 @@ args_apply() {
   SU_PROBE_TIMEOUT=$(cfg PROBE_TIMEOUT)
   SU_ONLY=$(cfg ONLY)
   SU_SKIP=$(cfg SKIP)
-  export SU_DRY_RUN SU_VERBOSE SU_QUIET SU_COLOR SU_TIMEOUT SU_PROBE_TIMEOUT
+  export SU_DRY_RUN SU_DETAILED SU_VERBOSE SU_QUIET SU_COLOR SU_TIMEOUT SU_PROBE_TIMEOUT
   log_init
   return 0
 }

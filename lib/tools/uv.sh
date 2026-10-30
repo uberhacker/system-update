@@ -3,6 +3,15 @@
 
 tool_uv_detect() { user_bin uv; }
 
+# uv_outdated: "tool|installed|latest" from `uv tool list --outdated`
+# ("ruff v0.4.0 [latest: 0.5.0]"); older uv without --outdated prints nothing.
+uv_outdated() {
+  local line re='^([^[:space:]]+) v([^[:space:]]+) \[latest: v?([^]]+)\]'
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] && printf '%s|%s|%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+  done < <(SU_RUN_TIMEOUT=$SU_TIMEOUT run_user "${SU_TOOL_BIN[uv]}" tool list --outdated 2>/dev/null)
+}
+
 tool_uv_update() {
   local bin="${SU_TOOL_BIN[uv]}" before after log rc=0 notes=() failed=0 changed=0 method
 
@@ -32,6 +41,7 @@ tool_uv_update() {
   if [ -d "${UV_TOOL_DIR:-$SU_USER_HOME/.local/share/uv/tools}" ]; then
     : > "$log"
     if [ "$SU_DRY_RUN" = 1 ]; then
+      detail_show "uv tool(s)" uv_outdated
       notes+=("would run uv tool upgrade --all")
     elif run_capture "$log" run_user "$bin" tool upgrade --all; then
       grep -qE '^ *[-+] ' "$log" && changed=1

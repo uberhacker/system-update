@@ -9,6 +9,9 @@
 #   * Colours are used only when stdout is a TTY, NO_COLOR is unset and
 #     --no-color was not given (or COLOR=always forces them on).
 #   * Icons are Unicode when the locale is UTF-8, plain ASCII otherwise.
+#   * With a run log open (SU_LOG_FD, see lib/core/runlog.sh) every line is
+#     also written there, timestamped and without colours, including what
+#     --quiet hides and the verbose-only lines (commands, details).
 
 : "${SU_VERBOSE:=0}"
 : "${SU_QUIET:=0}"
@@ -66,26 +69,51 @@ log_init() {
   fi
 }
 
-# Low level writer: everything goes to the console fd.
+SU_LOG_FD="${SU_LOG_FD:-}"
+
+# _log_file TEXT: append TEXT to the run log, if one is open: a timestamp,
+# then the text with colour escapes removed.
+_log_file() {
+  [ -n "$SU_LOG_FD" ] || return 0
+  local s="$*" esc=$'\033'
+  while [[ "$s" == *"$esc["* ]] && [[ "$s" =~ $esc\[[0-9\;]*m ]]; do
+    s="${s//"${BASH_REMATCH[0]}"/}"
+  done
+  if [ -z "$s" ]; then
+    printf '\n' >&"$SU_LOG_FD"
+  else
+    printf '%(%H:%M:%S)T %s\n' -1 "$s" >&"$SU_LOG_FD"
+  fi
+}
+
+# Low level writers: the console fd and the run log.
 _log_write() {
   printf '%s\n' "$*" >&"$SU_OUT"
+  _log_file "$*"
+}
+
+# _log_quiet TEXT: the console unless --quiet; the run log always.
+_log_quiet() {
+  if [ "$SU_QUIET" = 1 ]; then _log_file "$*"; else _log_write "$*"; fi
+}
+
+# _log_verbose TEXT: the console only with --verbose; the run log always.
+_log_verbose() {
+  if [ "$SU_VERBOSE" = 1 ]; then _log_write "$*"; else _log_file "$*"; fi
 }
 
 log_step() {
-  [ "$SU_QUIET" = 1 ] && return 0
-  _log_write ""
-  _log_write "${C_BOLD}${C_BLUE}${I_STEP}${C_RESET} ${C_BOLD}$*${C_RESET}"
+  _log_quiet ""
+  _log_quiet "${C_BOLD}${C_BLUE}${I_STEP}${C_RESET} ${C_BOLD}$*${C_RESET}"
 }
 
 log_info() {
-  [ "$SU_QUIET" = 1 ] && return 0
-  _log_write "  ${C_DIM}${I_INFO}${C_RESET} $*"
+  _log_quiet "  ${C_DIM}${I_INFO}${C_RESET} $*"
 }
 
 log_detail() {
   # Verbose-only chatter.
-  [ "$SU_VERBOSE" = 1 ] || return 0
-  _log_write "  ${C_DIM}  $*${C_RESET}"
+  _log_verbose "  ${C_DIM}  $*${C_RESET}"
 }
 
 log_warn() {
@@ -97,29 +125,30 @@ log_error() {
 }
 
 log_ok() {
-  [ "$SU_QUIET" = 1 ] && return 0
-  _log_write "  ${C_GREEN}${I_OK}${C_RESET} $*"
+  _log_quiet "  ${C_GREEN}${I_OK}${C_RESET} $*"
 }
 
 log_updated() {
-  [ "$SU_QUIET" = 1 ] && return 0
-  _log_write "  ${C_CYAN}${I_UPDATED}${C_RESET} $*"
+  _log_quiet "  ${C_CYAN}${I_UPDATED}${C_RESET} $*"
 }
 
 log_skipped() {
-  [ "$SU_QUIET" = 1 ] && return 0
-  _log_write "  ${C_DIM}${I_SKIPPED} $*${C_RESET}"
+  _log_quiet "  ${C_DIM}${I_SKIPPED} $*${C_RESET}"
 }
 
 log_dry() {
-  [ "$SU_QUIET" = 1 ] && return 0
-  _log_write "  ${C_MAGENTA}${I_DRY}${C_RESET} $*"
+  _log_quiet "  ${C_MAGENTA}${I_DRY}${C_RESET} $*"
 }
 
-# log_cmd "cmd args": shown in verbose mode before a command runs.
+# log_change TEXT: one row of a --detailed change list (under a log_dry line).
+log_change() {
+  _log_quiet "      $*"
+}
+
+# log_cmd "cmd args": shown in verbose mode before a command runs (and
+# always written to the run log).
 log_cmd() {
-  [ "$SU_VERBOSE" = 1 ] || return 0
-  _log_write "  ${C_DIM}\$ $*${C_RESET}"
+  _log_verbose "  ${C_DIM}\$ $*${C_RESET}"
 }
 
 # log_plain: always printed (summary, --list, --version).

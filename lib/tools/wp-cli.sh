@@ -17,7 +17,7 @@ tool_wp_cli_update() {
     *) step_fail "wp cli update failed ($(rc_note "$rc"))"; return 0 ;;
   esac
   if [ "$SU_DRY_RUN" = 1 ]; then
-    step_dry "would run wp cli update${before:+ (installed $before)}"
+    phar_dry_result "wp cli update" "$before" wp-cli/wp-cli
     return 0
   fi
   after=$(version_from_text "$(tool_probe "$bin" cli version --no-color)")

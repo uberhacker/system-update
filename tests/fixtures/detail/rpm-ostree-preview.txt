@@ -1,0 +1,10 @@
+AvailableUpdate:
+        Version: 40.1 (2024)
+           Diff: 2 upgraded
+Upgraded:
+  bash 5.2.26-3.fc40 -> 5.2.26-4.fc40
+  NetworkManager 1:1.44.2-1.fc40 -> 1:1.44.4-1.fc40
+Removed:
+  foo-1.0-1.fc40.x86_64
+Added:
+  bar-baz-2.0-1.fc40.noarch

@@ -25,6 +25,31 @@ dnf_check() {
   return "$rc"
 }
 
+# dnf_changes LOGFILE: "name.arch|installed|new" for the check-update output
+# ("name.arch  version  repo"; dnf4 puts a long name on a line of its own).
+# Installed versions come from one rpm query, epoch included like dnf shows it.
+dnf_changes() {
+  local line held="" i k v
+  local re='^([^[:space:]]+\.[^[:space:].]+)[[:space:]]+([^[:space:]]+)[[:space:]]+[^[:space:]]+[[:space:]]*$'
+  local -a keys=() news=()
+  local -A old=()
+  while IFS= read -r line; do
+    if [ -n "$held" ]; then line="$held $line"; held=""; fi
+    if [[ "$line" =~ ^[^[:space:]]+\.[^[:space:].]+$ ]]; then held="$line"; continue; fi
+    [[ "$line" =~ $re ]] || continue
+    keys+=("${BASH_REMATCH[1]}"); news+=("${BASH_REMATCH[2]}")
+  done < "$1"
+  [ ${#keys[@]} -gt 0 ] || return 0
+  if has_cmd rpm; then
+    while IFS=$'\t' read -r k v; do
+      [ -n "$v" ] && old[$k]="$v"
+    done < <(rpm -q --qf '%{NAME}.%{ARCH}\t%|EPOCH?{%{EPOCH}:}|%{VERSION}-%{RELEASE}\n' "${keys[@]}" 2>/dev/null)
+  fi
+  for i in "${!keys[@]}"; do
+    printf '%s|%s|%s\n' "${keys[i]}" "${old[${keys[i]}]:-?}" "${news[i]}"
+  done
+}
+
 pkg_dnf_update() {
   local dnf log rc=0 count
   dnf=$(dnf_cmd) || { step_skip "no dnf/yum binary found"; return 0; }
@@ -40,6 +65,7 @@ pkg_dnf_update() {
   esac
 
   if [ "$SU_DRY_RUN" = 1 ]; then
+    [ "$count" = 0 ] || detail_show "package(s)" dnf_changes "$log"
     if [ "$count" = 0 ]; then
       step_dry "no updates available"
     else

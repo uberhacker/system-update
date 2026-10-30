@@ -24,7 +24,11 @@ tool_rvm_update() {
     log_info "latest release unknown; letting rvm decide"
   fi
   if [ "$SU_DRY_RUN" = 1 ]; then
-    step_dry "would run 'rvm get stable'${installed:+ (installed $installed)}"
+    if [ -n "$latest" ]; then
+      step_dry "would run 'rvm get stable' (${installed:-?} -> $latest)"
+    else
+      step_dry "would run 'rvm get stable'${installed:+ (installed $installed)}"
+    fi
     return 0
   fi
   do_user "$bin" get stable || rc=$?

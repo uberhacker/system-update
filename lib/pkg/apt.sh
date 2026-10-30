@@ -11,6 +11,27 @@ apt_summary() {
   grep -E '^[0-9]+ upgraded, [0-9]+ newly installed' "$1" | tail -n1
 }
 
+# apt_changes LOGFILE: "name|installed|new" from the Inst/Remv lines of an
+# apt-get -s run, e.g.
+#   Inst libc6 [2.36-9+deb12u4] (2.36-9+deb12u7 Debian:12.7/stable [amd64])
+#   Inst linux-image-6.1.0-25-amd64 (6.1.106-3 Debian-Security:12/stable-security [amd64])
+#   Remv libfoo1 [1.2-3]
+apt_changes() {
+  local line
+  local re_up='^Inst ([^ ]+) \[([^]]+)\] \(([^ ]+) '
+  local re_new='^Inst ([^ ]+) \(([^ ]+) '
+  local re_rm='^Remv ([^ ]+)( \[([^]]+)\])?'
+  while IFS= read -r line; do
+    if [[ "$line" =~ $re_up ]]; then
+      printf '%s|%s|%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}"
+    elif [[ "$line" =~ $re_new ]]; then
+      printf '%s||%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    elif [[ "$line" =~ $re_rm ]]; then
+      printf '%s|%s|\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]:-?}"
+    fi
+  done < "$1"
+}
+
 # apt_refresh: apt-get update. apt exits 0 even when sources could not be
 # fetched (it keeps the old lists), so the output is inspected as well.
 # Returns 0 when every source was refreshed, 2 when some failed (the old
@@ -58,6 +79,7 @@ pkg_apt_update() {
     fi
     summary=$(apt_summary "$log")
     upgraded=$(count_matching '^Inst ' "$log")
+    detail_show "package(s)" apt_changes "$log"
     step_dry "${upgraded} package(s) would be upgraded/installed${summary:+ ($summary)}${APT_REFRESH_NOTE:+; $APT_REFRESH_NOTE}"
     return 0
   fi

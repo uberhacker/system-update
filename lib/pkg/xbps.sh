@@ -3,6 +3,28 @@
 
 pkg_xbps_dry_needs_root() { return 0; }
 
+# xbps_changes LOGFILE: "name|installed|new" from `xbps-install -Sun`, whose
+# lines are "<pkgver> <action> <arch> <repository> ..." with the new pkgver
+# (bash-5.2.21_1); the installed one comes from xbps-query.
+xbps_changes() {
+  local pkgver action _rest name old
+  while read -r pkgver action _rest; do
+    [[ "$pkgver" == *-* ]] || continue
+    name="${pkgver%-*}"
+    case "$action" in
+      update|install|remove) ;;
+      *) continue ;;
+    esac
+    old=$(xbps-query -p pkgver "$name" 2>/dev/null) || old=""
+    old="${old#"$name"-}"
+    case "$action" in
+      update) printf '%s|%s|%s\n' "$name" "${old:-?}" "${pkgver##*-}" ;;
+      install) printf '%s||%s\n' "$name" "${pkgver##*-}" ;;
+      remove) printf '%s|%s|\n' "$name" "${pkgver##*-}" ;;
+    esac
+  done < "$1"
+}
+
 pkg_xbps_update() {
   local log rc=0 count
   log=$(tmp_file) || return 1
@@ -15,6 +37,7 @@ pkg_xbps_update() {
       return 0
     fi
     count=$(count_matching ' (update|install) ' "$log")
+    detail_show "package(s)" xbps_changes "$log"
     step_dry "$count package(s) would be updated"
     return 0
   fi

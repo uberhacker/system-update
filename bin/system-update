@@ -60,6 +60,8 @@ source "$SU_ROOT/lib/core/runner.sh"
 source "$SU_ROOT/lib/core/pkg.sh"
 # shellcheck source=lib/core/tools.sh
 source "$SU_ROOT/lib/core/tools.sh"
+# shellcheck source=lib/core/runlog.sh
+source "$SU_ROOT/lib/core/runlog.sh"
 # shellcheck source=lib/core/selfupdate.sh
 source "$SU_ROOT/lib/core/selfupdate.sh"
 # shellcheck source=lib/pkg/apt.sh
@@ -132,17 +134,28 @@ list_main() {
   done
   log_plain "  user config: $(config_user_file)$([ -r "$(config_user_file)" ] || printf ' (absent)')"
   log_plain "  system config: /etc/system-update.conf$([ -r /etc/system-update.conf ] || printf ' (absent)')"
+  if cfg_bool LOGGING; then
+    log_plain "  logs: $(dir=$(cfg LOG_DIR); printf '%s' "${dir:-$(runlog_default_dir)}") (newest $(cfg LOG_KEEP) kept)"
+  else
+    log_plain "  logs: off (LOGGING=0)"
+  fi
 }
 
 # run_user_tools_as_sudo_user: we are root via sudo; run the user-level
 # tools in a child process as SUDO_USER with that user's login environment.
 run_user_tools_as_sudo_user() {
-  local results args=() rc=0 color=never
+  local results childlog="" args=() rc=0 color=never
   results=$(tmp_file) || return 1
   chown "$SU_USER" "$results" 2>/dev/null || true
+  # The child cannot write to root's log; it logs to a file of its own that
+  # is appended to this run's log afterwards.
+  if [ -n "$SU_LOG_FD" ]; then
+    childlog=$(tmp_file) && chown "$SU_USER" "$childlog" 2>/dev/null || childlog=""
+  fi
   [ "$SU_USE_COLOR" = 1 ] && color=always
   args=(--_user-tools --color "$color" --timeout "$SU_TIMEOUT")
   [ "$SU_DRY_RUN" = 1 ] && args+=(--dry-run)
+  [ "$SU_DETAILED" = 1 ] && args+=(--detailed)
   [ "$SU_VERBOSE" = 1 ] && args+=(--verbose)
   [ "$SU_QUIET" = 1 ] && args+=(--quiet)
   [ -n "$SU_ONLY" ] && args+=(--only "$SU_ONLY")
@@ -155,6 +168,7 @@ run_user_tools_as_sudo_user() {
   cfg_bool RUNTIMES && args+=(--runtimes)
   cfg_bool NPM_GLOBALS && args+=(--npm-globals)
   cfg_bool CONTAINERS && args+=(--containers)
+  if [ -n "$childlog" ]; then args+=(--log "$childlog"); else args+=(--no-log); fi
 
   log_info "running user-level tools as $SU_USER"
   local -a envp=(env -i "HOME=$SU_USER_HOME" "USER=$SU_USER" "LOGNAME=$SU_USER"
@@ -169,6 +183,7 @@ run_user_tools_as_sudo_user() {
     sudo -n -u "$SU_USER" -H -- "${envp[@]}" bash -lc 'exec "$0" "$@"' "$SU_BIN" "${args[@]}" </dev/null || rc=$?
   fi
   runner_import_file "$results"
+  [ -n "$childlog" ] && runlog_append "$childlog"
   if [ "$rc" -ne 0 ] && [ ! -s "$results" ]; then
     runner_record "user-tools" failed "child process for $SU_USER exited with $rc"
   fi
@@ -199,17 +214,20 @@ main() {
 
   if [ "$SU_ARG_USER_TOOLS" = 1 ]; then
     # Child process: only the invoking user's tools, results go to SU_RESULTS_OUT.
+    runlog_open
     tools_discover
     tools_run_all user
+    runlog_close 0
     exit 0
   fi
 
   tools_discover
   if [ "$SU_ARG_LIST" = 1 ]; then list_main; exit 0; fi
+  runlog_open "$@"
 
   log_plain "${C_BOLD}$(version_string)${C_RESET} on $(os_describe)"
   if [ "$SU_DRY_RUN" = 1 ]; then
-    log_plain "${C_MAGENTA}dry run: nothing will be changed${C_RESET}"
+    log_plain "${C_MAGENTA}dry run$([ "$SU_DETAILED" = 1 ] && printf ' (detailed)'): nothing will be changed${C_RESET}"
   fi
   [ "$SU_YES" = 1 ] && log_detail "--yes given (package managers never prompt anyway)"
   has_cmd curl || log_warn "curl is not installed: GitHub release lookups and downloads will be skipped"
@@ -246,6 +264,8 @@ main() {
   run_step extras reboot-check reboot_check_step
 
   summary_print || rc=1
+  [ -n "$SU_LOG_FILE" ] && log_plain "  log: $SU_LOG_FILE"
+  runlog_close "$rc"
   exit "$rc"
 }
 

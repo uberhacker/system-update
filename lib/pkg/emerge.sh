@@ -6,6 +6,34 @@
 
 pkg_emerge_dry_needs_root() { return 1; }
 
+# emerge_atom_split ATOM: "name|version" of cat/pkg-1.2.3-r1[:slot][::repo].
+emerge_atom_split() {
+  local atom="${1%%::*}"
+  atom="${atom%%:*}"
+  if [[ "$atom" =~ ^(.+)-([0-9][^-]*(-r[0-9]+)?)$ ]]; then
+    printf '%s|%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  else
+    printf '%s|?\n' "$atom"
+  fi
+}
+
+# emerge_changes LOGFILE: "name|installed|new" from `emerge --pretend`:
+#   [ebuild     U  ] sys-libs/glibc-2.39-r6:2.2::gentoo [2.38-r10:2.2::gentoo]
+#   [ebuild  N     ] app-misc/foo-1.0::gentoo
+emerge_changes() {
+  local line split name new old re='^\[ebuild[^]]*\] ([^ ]+)( \[([^]]+)\])?'
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] || continue
+    old="${BASH_REMATCH[3]}"
+    split=$(emerge_atom_split "${BASH_REMATCH[1]}")
+    name="${split%%|*}"; new="${split#*|}"
+    old="${old%%::*}"; old="${old%%:*}"
+    # A rebuild of the same version shows no bracket; say so.
+    if [ -z "$old" ] && [[ "$line" =~ ^\[ebuild[^]]*R ]]; then old="$new"; fi
+    printf '%s|%s|%s\n' "$name" "$old" "$new"
+  done < "$1"
+}
+
 pkg_emerge_update() {
   local log rc=0 count
   log=$(tmp_file) || return 1
@@ -18,6 +46,7 @@ pkg_emerge_update() {
       return 0
     fi
     count=$(count_matching '^\[ebuild' "$log")
+    detail_show "package(s)" emerge_changes "$log"
     step_dry "$count package(s) would be rebuilt/updated (tree not synced in dry run)"
     return 0
   fi

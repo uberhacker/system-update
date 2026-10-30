@@ -4,6 +4,9 @@
 
 REPO_ROOT=$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)
 FIXTURES="$REPO_ROOT/tests/fixtures"
+# No run logs from tests (entry-point runs would write to ~/.local/state);
+# runlog.bats and the entry tests that check logging turn it back on.
+export LOGGING=0
 STUBS="$REPO_ROOT/tests/stubs"
 
 # load_su: source every module into the test shell without running main.
@@ -15,7 +18,7 @@ load_su() {
   export SU_SKIP_EXIT_TRAP=1
   set +u
   local f
-  for f in log util config args os json github runner pkg tools selfupdate; do
+  for f in log util config args os json github runner pkg tools runlog selfupdate; do
     # shellcheck disable=SC1090
     source "$REPO_ROOT/lib/core/$f.sh"
   done

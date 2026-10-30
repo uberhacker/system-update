@@ -138,17 +138,23 @@ s_silent() { :; }
 @test "entry exits non-zero when a tool step fails" {
   local bindir="$BATS_TEST_TMPDIR/bin"
   make_fake_bin "$bindir" kilo 'case "$1" in --version) echo 1.2.3;; upgrade) echo "network down" >&2; exit 7;; esac'
-  PATH="$bindir:$PATH" SU_PKG_FALLBACK=0 SU_OS_RELEASE="$(fixture os-release/arch.txt)" \
+  PATH="$bindir:$PATH" SU_PKG_FALLBACK=0 SU_OS_RELEASE="$(fixture os-release/arch.txt)" LOGGING=1 LOG_DIR="$BATS_TEST_TMPDIR/logs" \
     run "$REPO_ROOT/bin/system-update" --only kilo --no-color
   assert_equal 1 "$status"
   assert_contains "$output" "0 ok, 0 updated, 0 skipped, 1 failed"
   assert_contains "$output" "exit code 7"
+  # The run log has the failing command, its stderr and its exit status.
+  run cat "$BATS_TEST_TMPDIR/logs/latest.log"
+  assert_contains "$output" "upgrade"
+  assert_contains "$output" "network down"
+  assert_contains "$output" "-> exit 7 after"
+  assert_contains "$output" "exit status 1"
 }
 
 @test "entry exits zero when every step is ok or skipped" {
   local bindir="$BATS_TEST_TMPDIR/bin"
   make_fake_bin "$bindir" kilo 'case "$1" in --version) echo 1.2.3;; upgrade) echo ok;; esac'
-  PATH="$bindir:$PATH" SU_PKG_FALLBACK=0 SU_OS_RELEASE="$(fixture os-release/arch.txt)" \
+  PATH="$bindir:$PATH" SU_PKG_FALLBACK=0 SU_OS_RELEASE="$(fixture os-release/arch.txt)" LOGGING=1 LOG_DIR="$BATS_TEST_TMPDIR/logs" \
     run "$REPO_ROOT/bin/system-update" --only kilo --no-color
   assert_equal 0 "$status"
   assert_contains "$output" "1 ok, 0 updated, 0 skipped, 0 failed"

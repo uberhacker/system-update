@@ -3,6 +3,7 @@
 # temp files, downloads with checksum verification, version comparison.
 
 : "${SU_DRY_RUN:=0}"
+: "${SU_DETAILED:=0}"         # --detailed: dry run that lists versions
 : "${SU_TIMEOUT:=300}"        # seconds for each third-party command
 : "${SU_PROBE_TIMEOUT:=20}"   # seconds for a "--version" style probe
 : "${SU_PKG_TIMEOUT:=3600}"   # seconds for a package manager run
@@ -94,6 +95,8 @@ root_prefix() {
 #   do_root    cmd...   like run_root, but only reports in dry-run mode.
 #   do_user    cmd...   like run_user, but only reports in dry-run mode.
 # Env: SU_RUN_TIMEOUT overrides the timeout for one call.
+# With a run log open, each command's output also goes to the log, followed
+# by its exit status and duration.
 
 _timeout_cmd() {
   local secs="${SU_RUN_TIMEOUT:-$SU_TIMEOUT}"
@@ -102,13 +105,27 @@ _timeout_cmd() {
   fi
 }
 
+# _run_logged CMD...: run CMD; with a run log open, copy its stdout and
+# stderr there as well and record how it ended. Output still reaches the
+# caller unchanged, so $(run_user ...) captures work as before. Commands then
+# write to a pipe rather than the terminal, so TTY-only progress bars are not
+# shown. (stderr is copied asynchronously and may land a line late.)
+_run_logged() {
+  [ -n "${SU_LOG_FD:-}" ] || { "$@"; return; }
+  local rc start=$SECONDS
+  { "$@" 2> >(tee -a "/dev/fd/$SU_LOG_FD" >&2); } | tee -a "/dev/fd/$SU_LOG_FD"
+  rc=${PIPESTATUS[0]}
+  printf '%(%H:%M:%S)T   -> exit %s after %ss\n' -1 "$rc" "$((SECONDS - start))" >&"$SU_LOG_FD"
+  return "$rc"
+}
+
 run_root() {
   local tmo
   tmo=$(_timeout_cmd)
   if is_root; then
     log_cmd "$*"
     # shellcheck disable=SC2086
-    $tmo "$@" </dev/null
+    _run_logged $tmo "$@" </dev/null
   else
     if ! has_cmd sudo; then
       log_error "sudo is not installed and we are not root; cannot run: $*"
@@ -116,7 +133,7 @@ run_root() {
     fi
     log_cmd "sudo $*"
     # shellcheck disable=SC2086
-    $tmo sudo -n "$@" </dev/null
+    _run_logged $tmo sudo -n "$@" </dev/null
   fi
 }
 
@@ -126,15 +143,15 @@ run_user() {
   if user_is_current; then
     log_cmd "$*"
     # shellcheck disable=SC2086
-    $tmo "$@" </dev/null
+    _run_logged $tmo "$@" </dev/null
   else
     log_cmd "(as $SU_USER) $*"
     if has_cmd runuser; then
       # shellcheck disable=SC2086
-      $tmo runuser -u "$SU_USER" -- "$@" </dev/null
+      _run_logged $tmo runuser -u "$SU_USER" -- "$@" </dev/null
     else
       # shellcheck disable=SC2086
-      $tmo sudo -n -u "$SU_USER" -H -- "$@" </dev/null
+      _run_logged $tmo sudo -n -u "$SU_USER" -H -- "$@" </dev/null
     fi
   fi
 }

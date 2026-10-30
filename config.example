@@ -83,3 +83,16 @@
 # auto-update, and a re-pull of the images used by existing podman/docker
 # containers (pull only; containers are never recreated or restarted).
 #CONTAINERS=0
+
+# Write a log file for every run (also --no-log / --log FILE). The log has a
+# header describing the run, every message including the ones --quiet hides
+# and the verbose-only commands, and each command's full output, exit status
+# and duration, with timestamps and without colours. Files are 0600.
+#LOGGING=1
+
+# Where logs go (absolute path). Empty: /var/log/system-update when run as
+# root, ${XDG_STATE_HOME:-~/.local/state}/system-update otherwise.
+#LOG_DIR=
+
+# How many logs to keep in LOG_DIR; older ones are deleted. 0 keeps all.
+#LOG_KEEP=10

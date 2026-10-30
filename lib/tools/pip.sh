@@ -16,6 +16,17 @@ pip_externally_managed() {
   python3 -c 'import os, sys, sysconfig; sys.exit(0 if os.path.exists(os.path.join(sysconfig.get_path("stdlib"), "EXTERNALLY-MANAGED")) else 1)' 2>/dev/null
 }
 
+# pipx_outdated: "package|installed|latest" for pipx packages that have a
+# newer release on PyPI (`pipx list --short` prints "name version").
+pipx_outdated() {
+  local name ver latest
+  while read -r name ver _; do
+    [ -n "$ver" ] || continue
+    latest=$(tool_latest_pypi "$name") || continue
+    version_lt "$ver" "$latest" && printf '%s|%s|%s\n' "$name" "$ver" "$latest"
+  done < <(run_user pipx list --short 2>/dev/null)
+}
+
 tool_pip_update() {
   local pip aws ver notes=() failed=0 changed=0 log pep668=0
   log=$(tmp_file) || return 1
@@ -23,6 +34,7 @@ tool_pip_update() {
 
   if has_cmd pipx; then
     if [ "$SU_DRY_RUN" = 1 ]; then
+      detail_show "pipx package(s)" pipx_outdated
       notes+=("would run pipx upgrade-all")
     elif run_capture "$log" run_user pipx upgrade-all; then
       if grep -qiE 'upgraded package' "$log"; then changed=1; notes+=("pipx: packages upgraded"); else notes+=("pipx: all up to date"); fi

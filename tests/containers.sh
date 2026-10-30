@@ -5,6 +5,8 @@
 # tests/containers-inner.sh runs these phases:
 #   list      --list reports the expected package manager
 #   dry-run   --dry-run exits 0 and the installed package set is unchanged
+#   detailed  --detailed --only system exits 0, changes nothing, and lists a
+#             package that was downgraded first (apt, dnf) with its versions
 #   real      --yes exits 0 and really upgraded packages (one installed
 #             package is downgraded first where the repositories allow it)
 #             and a second run reports nothing to do
@@ -41,7 +43,7 @@ while [ $# -gt 0 ]; do
     --restricted) RESTRICTED=1 ;;
     --keep-going) KEEP_GOING=1 ;;
     --fail-fast) KEEP_GOING=0 ;;
-    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) IMAGES+=("$1") ;;
   esac
   shift

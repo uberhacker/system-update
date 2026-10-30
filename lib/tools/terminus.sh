@@ -15,7 +15,7 @@ tool_terminus_update() {
     *) step_fail "terminus self:update failed ($(rc_note "$rc"))"; return 0 ;;
   esac
   if [ "$SU_DRY_RUN" = 1 ]; then
-    step_dry "would run terminus self:update${before:+ (installed $before)}"
+    phar_dry_result "terminus self:update" "$before" pantheon-systems/terminus
     return 0
   fi
   after=$(version_from_text "$(tool_probe "$bin" --version --no-ansi)")

@@ -9,7 +9,9 @@
 #   ./install.sh --uninstall  remove the installation (combine with --user/--prefix)
 #
 # The whole checkout is copied, including .git when present, so that
-# `system-update --self-update` can fast-forward the installed copy.
+# `system-update --self-update` can fast-forward the installed copy. Bash
+# completion is linked into bash-completion's directory for the same prefix
+# (DIR/share/bash-completion/completions, or the user's XDG data dir).
 
 set -euo pipefail
 
@@ -19,7 +21,7 @@ ACTION=install
 PREFIX=""
 
 usage() {
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -35,11 +37,16 @@ while [ $# -gt 0 ]; do
 done
 
 case "$MODE" in
-  user) PREFIX="${XDG_DATA_HOME:-$HOME/.local}"; BIN_DIR="$HOME/.local/bin"; SHARE_DIR="$PREFIX/system-update" ;;
+  user) BIN_DIR="$HOME/.local/bin"; SHARE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/system-update" ;;
   system) PREFIX=/usr/local; BIN_DIR="$PREFIX/bin"; SHARE_DIR="$PREFIX/share/system-update" ;;
   prefix) BIN_DIR="$PREFIX/bin"; SHARE_DIR="$PREFIX/share/system-update" ;;
 esac
 LINK="$BIN_DIR/system-update"
+case "$MODE" in
+  user) COMP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions" ;;
+  *) COMP_DIR="$PREFIX/share/bash-completion/completions" ;;
+esac
+COMP_LINK="$COMP_DIR/system-update"
 
 # priv CMD...: run as root when the target is not writable by us.
 priv() {
@@ -59,6 +66,11 @@ priv() {
 }
 
 if [ "$ACTION" = uninstall ]; then
+  # Only our own symlink; a completion file someone else put there stays.
+  if [ -L "$COMP_LINK" ] && [[ "$(readlink "$COMP_LINK")" == "$SHARE_DIR/"* ]]; then
+    priv "$COMP_LINK" rm -f "$COMP_LINK"
+    echo "removed $COMP_LINK"
+  fi
   if [ -L "$LINK" ] || [ -e "$LINK" ]; then
     priv "$LINK" rm -f "$LINK"
     echo "removed $LINK"
@@ -81,7 +93,7 @@ priv "$SHARE_DIR" mkdir -p "$(dirname "$SHARE_DIR")" "$BIN_DIR"
 priv "$SHARE_DIR" rm -rf "$staging"
 priv "$SHARE_DIR" mkdir -p "$staging"
 # Copy everything except test vendoring; .git is kept for self-update.
-for item in bin lib system-update VERSION LICENSE README.md config.example install.sh .git; do
+for item in bin lib completions system-update VERSION LICENSE README.md config.example install.sh .git; do
   [ -e "$SRC/$item" ] || continue
   priv "$SHARE_DIR" cp -a "$SRC/$item" "$staging/"
 done
@@ -93,6 +105,15 @@ priv "$SHARE_DIR" mv "$staging" "$SHARE_DIR"
 priv "$SHARE_DIR" rm -rf "$SHARE_DIR.old"
 priv "$SHARE_DIR" chmod 0755 "$SHARE_DIR/bin/system-update" "$SHARE_DIR/system-update"
 priv "$LINK" ln -sfn "$SHARE_DIR/bin/system-update" "$LINK"
+if [ -f "$SHARE_DIR/completions/system-update.bash" ]; then
+  if [ -e "$COMP_LINK" ] && [ ! -L "$COMP_LINK" ]; then
+    echo "note: $COMP_LINK exists and is not ours; bash completion not linked"
+  else
+    priv "$COMP_DIR" mkdir -p "$COMP_DIR"
+    priv "$COMP_LINK" ln -sfn "$SHARE_DIR/completions/system-update.bash" "$COMP_LINK"
+    echo "completion: $COMP_LINK (new shells; needs the bash-completion package)"
+  fi
+fi
 
 echo "installed $(tr -d '[:space:]' < "$SHARE_DIR/VERSION") to $SHARE_DIR"
 echo "command:   $LINK"

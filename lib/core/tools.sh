@@ -112,6 +112,10 @@ tool_probe() {
   # Read, remove, then print: a caller that stops reading early (| head -n1)
   # kills this subshell with SIGPIPE, which must not leave the file behind.
   text=$(head -c 4096 "$out")
+  if [ -n "${SU_LOG_FD:-}" ]; then
+    _log_file "  probe: $bin $* (exit $rc)"
+    head -c 1024 "$out" | head -n 10 >&"$SU_LOG_FD"
+  fi
   rm -f -- "$out"
   printf '%s\n' "$text"
   return "$rc"
@@ -174,6 +178,45 @@ tool_probe_check() {
   return 0
 }
 
+# tool_latest_npm PKG: newest version of PKG on the npm registry. Read-only;
+# used by --detailed to show what an update would bring.
+tool_latest_npm() {
+  local v=""
+  if has_cmd npm; then
+    v=$(SU_RUN_TIMEOUT=$SU_PROBE_TIMEOUT run_user npm view "$1" version 2>/dev/null | tail -n1)
+  elif has_cmd pnpm; then
+    v=$(SU_RUN_TIMEOUT=$SU_PROBE_TIMEOUT run_user pnpm view "$1" version 2>/dev/null | tail -n1)
+  fi
+  [[ "$v" =~ ^[0-9]+\.[0-9]+ ]] || return 1
+  printf '%s\n' "$v"
+}
+
+# tool_latest_pypi PKG: newest version of PKG on PyPI (--detailed only).
+tool_latest_pypi() {
+  local f v
+  [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
+  f=$(tmp_file) || return 1
+  download "https://pypi.org/pypi/$1/json" "$f" 2>/dev/null || return 1
+  v=$(json_get .info.version "$f" 2>/dev/null) || return 1
+  [[ "$v" =~ ^[0-9]+\.[0-9]+ ]] || return 1
+  printf '%s\n' "$v"
+}
+
+# tool_latest EXPECT_PKGS: newest published version of a tool, found
+# through the registry of the package that installed it (npm, PyPI) or, for
+# a self-updating binary whose expected package is a scoped npm package
+# (Claude Code, Codex, ...), through npm. Fails when nothing applies.
+tool_latest() {
+  local expect="$1" pkg="${TOOL_METHOD#*:}"
+  case "${TOOL_METHOD%%:*}" in
+    npm|bun|pnpm) tool_latest_npm "$pkg" ;;
+    uv|pipx) tool_latest_pypi "$pkg" ;;
+    *)
+      [[ "$expect" == @*/* ]] || return 1
+      tool_latest_npm "${expect%%,*}" ;;
+  esac
+}
+
 # tool_pkg_update: update through the package that installed the tool.
 # Returns 0 if a package manager handled it, 2 if none applies.
 tool_pkg_update() {
@@ -224,11 +267,20 @@ tool_standard() {
   log_info "update method: $how"
 
   if [ "$SU_DRY_RUN" = 1 ]; then
+    local latest="" change="${before:+ (installed $before)}"
+    if detail_enabled && latest=$(tool_latest "$expect"); then
+      log_info "latest published version: $latest"
+      if [ -n "$before" ] && ! version_lt "$before" "$latest"; then
+        step_ok "up to date ($before)"
+        return 0
+      fi
+      change=" (${before:-?} -> $latest)"
+    fi
     if tool_pkg_update; then
-      step_dry "would update via $how${before:+ (installed $before)}"
+      step_dry "would update via $how$change"
     elif [ ${#cmd[@]} -gt 0 ]; then
       log_dry "would run: ${cmd[*]}"
-      step_dry "would run '${cmd[*]}'${before:+ (installed $before)}"
+      step_dry "would run '${cmd[*]}'$change"
     else
       step_skip "no known update method"
     fi
@@ -333,6 +385,22 @@ phar_update() {
     step_skip "$real is not writable and sudo is unavailable"
     return 3
   fi
+}
+
+# phar_dry_result WHAT INSTALLED REPO: the dry-run result of a phar update.
+# With --detailed the latest GitHub release says whether there is anything
+# to do and to which version.
+phar_dry_result() {
+  local what="$1" before="$2" latest
+  if detail_enabled && latest=$(gh_latest_version "$3"); then
+    if [ -n "$before" ] && ! version_lt "$before" "$latest"; then
+      step_ok "up to date ($before)"
+    else
+      step_dry "would run $what (${before:-?} -> $latest)"
+    fi
+    return 0
+  fi
+  step_dry "would run $what${before:+ (installed $before)}"
 }
 
 # tools_run_all SCOPE_FILTER: run the update step of every discovered tool

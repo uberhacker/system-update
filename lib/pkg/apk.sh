@@ -3,6 +3,21 @@
 
 pkg_apk_dry_needs_root() { return 0; }
 
+# apk_changes LOGFILE: "name|installed|new" from `apk upgrade -s`:
+#   (1/3) Upgrading musl (1.2.4-r2 -> 1.2.5-r0)
+#   (2/3) Installing libfoo (1.0-r0)
+apk_changes() {
+  local line re='^\([0-9]+/[0-9]+\) (Upgrading|Downgrading|Replacing|Installing|Purging) ([^ ]+) \(([^ )]+)( -> ([^ )]+))?\)'
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] || continue
+    case "${BASH_REMATCH[1]}" in
+      Installing) printf '%s||%s\n' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" ;;
+      Purging) printf '%s|%s|\n' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" ;;
+      *) printf '%s|%s|%s\n' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[5]:-${BASH_REMATCH[3]}}" ;;
+    esac
+  done < "$1"
+}
+
 pkg_apk_update() {
   local log rc=0 count
   log=$(tmp_file) || return 1
@@ -16,6 +31,7 @@ pkg_apk_update() {
       return 0
     fi
     count=$(count_matching '^\([0-9]+/[0-9]+\) (Upgrading|Installing|Downgrading)' "$log")
+    detail_show "package(s)" apk_changes "$log"
     step_dry "$count package(s) would be upgraded"
     return 0
   fi

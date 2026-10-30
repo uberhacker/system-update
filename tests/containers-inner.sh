@@ -168,6 +168,31 @@ if phase_enabled dry-run; then
   fi
 fi
 
+# ---------------------------------------------------------------- detailed
+# --detailed lists each pending package with its versions. With a staged
+# downgrade (apt, dnf) that package must show up as a row of the table.
+if phase_enabled detailed; then
+  section "--detailed"
+  staged_pkg=""
+  if staged=$(stage_upgrade); then
+    read -r _ staged_pkg _ <<< "$staged"
+  fi
+  echo "$staged"
+  before=$(snapshot)
+  out=$("$SU" --detailed --only system 2>&1); rc=$?
+  printf '%s\n' "$out"
+  after=$(snapshot)
+  if [ "$before" != "$after" ]; then
+    result detailed fail "package set changed during the detailed dry run"
+  elif [ "$rc" -ne 0 ]; then
+    result detailed fail "exit $rc"
+  elif [ -n "$staged_pkg" ] && ! grep -qE "^ {6}${staged_pkg}(\.[a-z0-9_]+)? +[^ ]+ +-> " <<< "$out"; then
+    result detailed fail "staged $staged_pkg is not in the change list"
+  else
+    result detailed pass "$(grep -E 'would change:' <<< "$out" | head -n1 | sed 's/^ *[^ ]* //')"
+  fi
+fi
+
 # ---------------------------------------------------------------- real run
 if phase_enabled real; then
   section "--yes (real run)"

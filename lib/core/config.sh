@@ -19,6 +19,7 @@ SU_DEFAULT_REPO="https://github.com/bradvrudney/system-update"
 #   color    auto|always|never
 #   token    [A-Za-z0-9_.-]
 #   name     a git ref name
+#   path     an absolute path (no "..", no spaces or shell metacharacters)
 declare -gA SU_CFG_DEFAULT=(
   [SELF_UPDATE_REPO]="$SU_DEFAULT_REPO"
   [SELF_UPDATE_BRANCH]=""
@@ -40,6 +41,9 @@ declare -gA SU_CFG_DEFAULT=(
   [NPM_GLOBALS]="0"
   [GO_TOOLCHAIN]="0"
   [CONTAINERS]="0"
+  [LOGGING]="1"
+  [LOG_DIR]=""
+  [LOG_KEEP]="10"
 )
 declare -gA SU_CFG_TYPE=(
   [SELF_UPDATE_REPO]=url
@@ -61,6 +65,9 @@ declare -gA SU_CFG_TYPE=(
   [NPM_GLOBALS]=bool
   [GO_TOOLCHAIN]=bool
   [CONTAINERS]=bool
+  [LOGGING]=bool
+  [LOG_DIR]=path
+  [LOG_KEEP]=int
 )
 declare -gA SU_CFG=()        # effective values
 declare -gA SU_CFG_SOURCE=() # where each value came from (for --list)
@@ -90,6 +97,7 @@ config_valid() {
     color) [[ "$value" =~ ^(auto|always|never)$ ]] ;;
     token) [[ "$value" =~ ^[A-Za-z0-9_.-]*$ ]] ;;
     name) [[ "$value" =~ ^[A-Za-z0-9_./-]*$ ]] && [[ "$value" != *..* ]] && [[ "$value" != -* ]] ;;
+    path) [ -z "$value" ] || { [[ "$value" =~ ^/[A-Za-z0-9_.@+/-]*$ ]] && [[ "$value" != *..* ]]; } ;;
     *) return 1 ;;
   esac
 }

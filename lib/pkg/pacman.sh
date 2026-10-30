@@ -46,6 +46,15 @@ pacman_pending() {
   esac
 }
 
+# pacman_changes LOGFILE: "name|installed|new" from checkupdates or
+# `pacman -Qu` output ("gnupg 2.4.9-3 -> 2.4.9-4").
+pacman_changes() {
+  local name old arrow new _rest
+  while read -r name old arrow new _rest; do
+    [ "$arrow" = "->" ] && printf '%s|%s|%s\n' "$name" "$old" "$new"
+  done < "$1"
+}
+
 pkg_pacman_update() {
   local log rc=0 count aur="" aur_note=""
   log=$(tmp_file) || return 1
@@ -62,7 +71,9 @@ pkg_pacman_update() {
     rc=0
     pacman_pending "$log" || rc=$?
     case "$rc" in
-      0) count=$(grep -c . "$log"); step_dry "$count package(s) would be upgraded" ;;
+      0) count=$(grep -c . "$log")
+         detail_show "package(s)" pacman_changes "$log"
+         step_dry "$count package(s) would be upgraded" ;;
       1) step_dry "no updates available" ;;
       *) step_fail "could not check for updates (database sync failed)"; return 0 ;;
     esac
