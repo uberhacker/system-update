@@ -266,7 +266,7 @@ tool_standard() {
     probe+=("$1"); shift
   done
   tool_identify "$name" "$bin" "$regex" "$expect" "${probe[@]}" || return 0
-  local before after rc=0 how
+  local before after rc=0 how tmo=""
   before=$(version_from_text "$TOOL_PROBE_OUT")
   if [ -z "$before" ] && [ ${#probe[@]} -gt 0 ]; then
     before=$(version_from_text "$(tool_probe "$bin" "${probe[@]}")")
@@ -318,10 +318,14 @@ tool_standard() {
       return 0
     fi
     rc=0
-    do_user "${cmd[@]}" || rc=$?
+    # A tool's own updater gets TOOL_TIMEOUT (120 s by default), not the
+    # longer TIMEOUT: "devin update" and friends finish in seconds or not
+    # at all, and a hung one should not hold the run for five minutes.
+    tmo="${SU_RUN_TIMEOUT:-$SU_TOOL_TIMEOUT}"
+    SU_RUN_TIMEOUT=$tmo do_user "${cmd[@]}" || rc=$?
   fi
   if [ "$rc" -ne 0 ]; then
-    step_fail "update command failed ($(rc_note "$rc"))"
+    step_fail "update command failed ($(SU_RUN_TIMEOUT=${tmo:-${SU_RUN_TIMEOUT:-$SU_TIMEOUT}} rc_note "$rc"))"
     return 0
   fi
   if [ ${#probe[@]} -gt 0 ]; then
