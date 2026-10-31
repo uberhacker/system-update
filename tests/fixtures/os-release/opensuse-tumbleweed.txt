@@ -1,0 +1,6 @@
+NAME="openSUSE Tumbleweed"
+# VERSION="20240901"
+ID="opensuse-tumbleweed"
+ID_LIKE="opensuse suse"
+VERSION_ID="20240901"
+PRETTY_NAME="openSUSE Tumbleweed"

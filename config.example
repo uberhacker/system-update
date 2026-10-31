@@ -1,0 +1,100 @@
+# system-update configuration
+#
+# Copy to ${XDG_CONFIG_HOME:-~/.config}/system-update/config (per user) or
+# /etc/system-update.conf (system wide). Simple KEY=value lines; the file is
+# parsed, never sourced, so no shell syntax is interpreted. Quotes around a
+# value are optional. Unknown keys and invalid values are ignored with a
+# warning. Environment variables with the same names override the files;
+# command line flags override everything.
+
+# Where --self-update pulls this program from (https:// only). Unset, a git
+# checkout follows the remote it was cloned from and a plain or single-file
+# installation uses the repository below; set it to follow a fork.
+#SELF_UPDATE_REPO=https://github.com/uberhacker/system-update
+
+# Branch for --self-update. Empty (default) follows the checkout's current
+# branch if the remote has it, otherwise the remote's default branch
+# (master on the repository above).
+#SELF_UPDATE_BRANCH=
+
+# Steps to skip or to run exclusively (comma separated). Names: system (or
+# the package manager name: apt, dnf, zypper, pacman, apk, ...), flatpak,
+# snap, firmware, reboot-check, tools, or any tool name from --list.
+#SKIP=snap,composer
+#ONLY=
+
+# Seconds a third-party tool may take before it is killed (default 300).
+#TIMEOUT=300
+
+# Seconds a "--version" probe may take (default 20). antirez's kilo editor,
+# for example, never returns when called with -v; this keeps us moving.
+#PROBE_TIMEOUT=20
+
+# GitHub token to raise the API rate limit for release lookups. GH_TOKEN
+# from the environment is accepted too.
+#GITHUB_TOKEN=
+
+# Colour output: auto (TTY only, honours NO_COLOR), always, never.
+#COLOR=auto
+
+# Install jq with the system package manager when it is missing (real runs
+# only). Without jq a small built-in extractor is used instead.
+#INSTALL_JQ=0
+
+# Allow vendor "curl | sh" installers that cannot be verified (ollama when
+# it was not installed by its own installer, AnythingLLM Desktop).
+#ALLOW_UNVERIFIED_INSTALLERS=0
+
+# Apply firmware updates found by fwupd (they may require a reboot).
+# Without this they are only listed.
+#FIRMWARE=0
+
+# Remove Node.js versions other than the new default (nvm/nodebrew).
+#PRUNE_NODE=0
+
+# On Arch: run yay/paru for AUR packages as the invoking user (never as root).
+#AUR_HELPER=0
+
+# Remove orphaned packages after upgrading (apt autoremove, dnf autoremove,
+# pacman -Rns $(pacman -Qtdq), ...).
+#AUTOREMOVE=1
+
+# Opt-in steps (off by default). Each has a flag of the same name in lower
+# case with dashes (--nvim-plugins, --runtimes, --npm-globals, --go-toolchain,
+# --containers).
+
+# Sync Neovim plugins headlessly (lazy.nvim "Lazy! sync", packer PackerSync
+# or vim-plug PlugUpdate).
+#NVIM_PLUGINS=0
+
+# Upgrade runtimes managed by mise (`mise upgrade`, within each tool's
+# configured spec) and asdf (the pins in ~/.tool-versions move to the newest
+# version of the same major; project .tool-versions files are never changed).
+#RUNTIMES=0
+
+# `npm update -g` under the user's own Node (nvm, nodebrew, ~/.npm-global).
+# A distro Node whose global prefix is outside the home is never touched.
+#NPM_GLOBALS=0
+
+# Replace /usr/local/go with the latest stable Go from go.dev, sha256-verified
+# and swapped in atomically. Only when /usr/local/go exists and no distro
+# package owns it.
+#GO_TOOLCHAIN=0
+
+# distrobox upgrade --all, the package manager inside each toolbox, podman
+# auto-update, and a re-pull of the images used by existing podman/docker
+# containers (pull only; containers are never recreated or restarted).
+#CONTAINERS=0
+
+# Write a log file for every run (also --no-log / --log FILE). The log has a
+# header describing the run, every message including the ones --quiet hides
+# and the verbose-only commands, and each command's full output, exit status
+# and duration, with timestamps and without colours. Files are 0600.
+#LOGGING=1
+
+# Where logs go (absolute path). Empty: /var/log/system-update when run as
+# root, ${XDG_STATE_HOME:-~/.local/state}/system-update otherwise.
+#LOG_DIR=
+
+# How many logs to keep in LOG_DIR; older ones are deleted. 0 keeps all.
+#LOG_KEEP=10

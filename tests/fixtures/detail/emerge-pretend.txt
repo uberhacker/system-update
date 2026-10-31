@@ -1,0 +1,4 @@
+[ebuild     U  ] sys-libs/glibc-2.39-r6:2.2::gentoo [2.38-r10:2.2::gentoo] USE="x"
+[ebuild  N     ] app-misc/foo-1.0::gentoo
+[ebuild   R    ] dev-lang/perl-5.40.0-r1:0/5.40
+[ebuild     U  ] dev-libs/openssl-3.3.2_p1 [3.3.1]

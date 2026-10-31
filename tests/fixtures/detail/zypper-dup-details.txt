@@ -1,0 +1,93 @@
+Loading repository data...
+Reading installed packages...
+Warning: You are about to do a distribution upgrade with all enabled repositories. Make sure these repositories are compatible before you continue. See 'man zypper' for more information about this command.
+Computing distribution upgrade...
+
+The following package is going to be upgraded:
+openSUSE-build-key
+  1.0-68.1 -> 1.0-69.1
+  x86_64
+  openSUSE-Tumbleweed-Update
+  openSUSE
+
+The following 11 NEW packages are going to be installed:
+krb5            
+  1.22.2-5.1 
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libbrotlicommon1
+  1.2.1-1.1  
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libbrotlidec1   
+  1.2.1-1.1  
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libcom_err2     
+  1.47.4-1.1 
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libcurl4        
+  8.23.0-2.1 
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libkeyutils1    
+  1.6.3-7.9  
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libldap2        
+  2.6.13-1.6 
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libsasl2-3      
+  2.1.28-13.1
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libssh-config   
+  0.11.5-3.1 
+  noarch
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libssh4         
+  0.11.5-3.1 
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+libverto1       
+  0.3.2-3.9  
+  x86_64
+  openSUSE-Tumbleweed-Oss
+  openSUSE
+
+The following package is going to be REMOVED:
+libcurl-mini4
+  8.23.0-2.1
+  x86_64
+  openSUSE
+
+1 package to upgrade, 11 new, 1 to remove.
+
+Package download size:     2.0 MiB
+
+Package install size change:
+              |       5.0 MiB  required by packages that will be installed
+     4.1 MiB  |  -  960.8 KiB  released by packages that will be removed
+
+Backend:  classic_rpmtrans --dry-run
+Continue? [y/n/v/...? shows all options] (y): y
+
+Checking for file conflicts: [...done]
+Warning: 12 packages had to be excluded from file conflicts check because they are not yet downloaded.
+
+    Note: Checking for file conflicts requires not installed packages to be downloaded in advance in
+    order to access their file lists. See option '--download-in-advance / --dry-run --download-only'
+    in the zypper manual page for details.
+

@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+# system-update - update the OS packages and every supported third-party tool.
+#
+# Entry point. Resolves its own location through symlinks, loads the modules
+# from ../lib and runs the steps. Requires bash 4.4 or newer.
+#
+# Based on Ed Reel's system-update (https://github.com/uberhacker/system-update).
+# Licensed under the GNU GPL v3; see LICENSE.
+
+set -uo pipefail
+
+if [ -z "${BASH_VERSINFO:-}" ] || [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
+   { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 4 ]; }; then
+  echo "system-update needs bash 4.4 or newer (found ${BASH_VERSION:-unknown})" >&2
+  exit 1
+fi
+
+# The core relies on a few external commands (coreutils, grep, sed); say
+# which one is missing up front instead of failing deep inside a step.
+# Nothing else is assumed: minimal images lack awk, diff, curl and jq.
+for _su_cmd in timeout mktemp install readlink grep sed sort; do
+  if ! command -v "$_su_cmd" >/dev/null 2>&1; then
+    echo "system-update needs '$_su_cmd' on PATH (GNU coreutils, grep and sed are required)" >&2
+    exit 1
+  fi
+done
+unset _su_cmd
+
+# su_resolve_self: absolute path of this file, following symlinks.
+su_resolve_self() {
+  local src="${BASH_SOURCE[0]}" dir
+  while [ -L "$src" ]; do
+    dir=$(cd -P "$(dirname "$src")" && pwd)
+    src=$(readlink "$src")
+    [[ "$src" != /* ]] && src="$dir/$src"
+  done
+  printf '%s/%s\n' "$(cd -P "$(dirname "$src")" && pwd)" "$(basename "$src")"
+}
+# SU_BIN is this program (re-run for the user-level tools under sudo).
+# SU_ROOT is the tree it was loaded from: the directory above bin/, or for a
+# single-file build the directory holding the file. SU_BUNDLED is a build
+# constant, not a setting: build.sh rewrites the next line to SU_BUNDLED=1.
+SU_BUNDLED=0
+SU_BIN=$(su_resolve_self)
+if [ "$SU_BUNDLED" = 1 ]; then
+  SU_ROOT=$(dirname "$SU_BIN")
+else
+  SU_ROOT=$(cd -P "$(dirname "$SU_BIN")/.." && pwd)
+fi
+export SU_ROOT
+
+# Modules. build.sh replaces everything between the two markers with the
+# modules' contents to make the single-file build.
+# @@BUNDLE-MODULES-BEGIN@@
+# shellcheck source=lib/core/log.sh
+source "$SU_ROOT/lib/core/log.sh"
+# shellcheck source=lib/core/util.sh
+source "$SU_ROOT/lib/core/util.sh"
+# shellcheck source=lib/core/config.sh
+source "$SU_ROOT/lib/core/config.sh"
+# shellcheck source=lib/core/args.sh
+source "$SU_ROOT/lib/core/args.sh"
+# shellcheck source=lib/core/os.sh
+source "$SU_ROOT/lib/core/os.sh"
+# shellcheck source=lib/core/json.sh
+source "$SU_ROOT/lib/core/json.sh"
+# shellcheck source=lib/core/github.sh
+source "$SU_ROOT/lib/core/github.sh"
+# shellcheck source=lib/core/runner.sh
+source "$SU_ROOT/lib/core/runner.sh"
+# shellcheck source=lib/core/pkg.sh
+source "$SU_ROOT/lib/core/pkg.sh"
+# shellcheck source=lib/core/tools.sh
+source "$SU_ROOT/lib/core/tools.sh"
+# shellcheck source=lib/core/runlog.sh
+source "$SU_ROOT/lib/core/runlog.sh"
+# shellcheck source=lib/core/selfupdate.sh
+source "$SU_ROOT/lib/core/selfupdate.sh"
+# shellcheck source=lib/pkg/apt.sh
+source "$SU_ROOT/lib/pkg/apt.sh"
+# shellcheck source=lib/pkg/dnf.sh
+source "$SU_ROOT/lib/pkg/dnf.sh"
+# shellcheck source=lib/pkg/zypper.sh
+source "$SU_ROOT/lib/pkg/zypper.sh"
+# shellcheck source=lib/pkg/pacman.sh
+source "$SU_ROOT/lib/pkg/pacman.sh"
+# shellcheck source=lib/pkg/apk.sh
+source "$SU_ROOT/lib/pkg/apk.sh"
+# shellcheck source=lib/pkg/xbps.sh
+source "$SU_ROOT/lib/pkg/xbps.sh"
+# shellcheck source=lib/pkg/emerge.sh
+source "$SU_ROOT/lib/pkg/emerge.sh"
+# shellcheck source=lib/pkg/nix.sh
+source "$SU_ROOT/lib/pkg/nix.sh"
+# shellcheck source=lib/pkg/rpm-ostree.sh
+source "$SU_ROOT/lib/pkg/rpm-ostree.sh"
+# shellcheck source=lib/pkg/flatpak.sh
+source "$SU_ROOT/lib/pkg/flatpak.sh"
+# shellcheck source=lib/pkg/snap.sh
+source "$SU_ROOT/lib/pkg/snap.sh"
+# shellcheck source=lib/pkg/fwupd.sh
+source "$SU_ROOT/lib/pkg/fwupd.sh"
+tools_load
+# @@BUNDLE-MODULES-END@@
+
+# version_string: "system-update X.Y.Z (git abcdef1)"
+version_string() {
+  local v commit=""
+  if [ "$SU_BUNDLED" = 1 ]; then
+    printf 'system-update %s (git %s, single file)\n' "${SU_BUNDLE_VERSION:-unknown}" "${SU_BUNDLE_COMMIT:-unknown}"
+    return 0
+  fi
+  v=$(tr -d '[:space:]' < "$SU_ROOT/VERSION" 2>/dev/null || echo unknown)
+  if [ -e "$SU_ROOT/.git" ] && has_cmd git; then
+    commit=$(git -C "$SU_ROOT" rev-parse --short HEAD 2>/dev/null || true)
+  fi
+  printf 'system-update %s%s\n' "$v" "${commit:+ (git $commit)}"
+}
+
+# completion_main SHELL: print the completion script (--completion bash).
+# A single-file build carries it as su_completion_script (added by build.sh).
+completion_main() {
+  case "$1" in
+    bash|zsh) ;;
+    *) echo "system-update: --completion supports bash (zsh can load it with bashcompinit)" >&2; return 2 ;;
+  esac
+  if declare -F su_completion_script >/dev/null; then
+    su_completion_script
+  else
+    cat -- "$SU_ROOT/completions/system-update.bash"
+  fi
+}
+
+# list_main: --list output.
+list_main() {
+  local name scope method bin key
+  log_plain "$(version_string)"
+  log_plain "Distro:          $SU_OS_PRETTY"
+  log_plain "os-release:      ID=${SU_OS_ID:-?}${SU_OS_ID_LIKE:+ ID_LIKE=$SU_OS_ID_LIKE}${SU_OS_VARIANT_ID:+ VARIANT_ID=$SU_OS_VARIANT_ID}"
+  log_plain "Package manager: $SU_PKG$([ "$SU_PKG" = zypper ] && printf ' (%s)' "$SU_ZYPPER_MODE")$(pkg_supported || printf ' (not supported)')"
+  log_plain "Running as:      $SU_CUR_USER$([ "$SU_USER" != "$SU_CUR_USER" ] && printf ' (user-level tools as %s)' "$SU_USER")"
+  log_plain "Extras:          flatpak=$(has_cmd flatpak && echo yes || echo no) snap=$(has_cmd snap && echo yes || echo no) fwupd=$(has_cmd fwupdmgr && echo yes || echo no) jq=$(json_has_jq && echo yes || echo no)"
+  log_plain ""
+  log_plain "Tools found (${#SU_TOOLS[@]}):"
+  if [ ${#SU_TOOLS[@]} -eq 0 ]; then
+    log_plain "  (none)"
+  fi
+  for name in "${SU_TOOLS[@]-}"; do
+    [ -n "$name" ] || continue
+    bin="${SU_TOOL_BIN[$name]}"
+    scope=$(tool_scope "$name")
+    method=""
+    if [ -x "$bin" ] && [ ! -d "$bin" ]; then method=$(install_method "$bin"); fi
+    log_plain "$(printf '  %-16s %-7s %s%s%s' "$name" "$scope" "$bin" "${method:+  [$method]}" "$(step_enabled tools "$name" || printf '  (disabled by --only/--skip)')")"
+  done
+  log_plain ""
+  log_plain "Settings (non-default):"
+  for key in $(printf '%s\n' "${!SU_CFG[@]}" | sort); do
+    [ "${SU_CFG_SOURCE[$key]}" = default ] && continue
+    if [ "$key" = GITHUB_TOKEN ]; then
+      log_plain "  $key=<set> (${SU_CFG_SOURCE[$key]})"
+    else
+      log_plain "  $key=${SU_CFG[$key]} (${SU_CFG_SOURCE[$key]})"
+    fi
+  done
+  log_plain "  user config: $(config_user_file)$([ -r "$(config_user_file)" ] || printf ' (absent)')"
+  log_plain "  system config: /etc/system-update.conf$([ -r /etc/system-update.conf ] || printf ' (absent)')"
+  if cfg_bool LOGGING; then
+    log_plain "  logs: $(dir=$(cfg LOG_DIR); printf '%s' "${dir:-$(runlog_default_dir)}") (newest $(cfg LOG_KEEP) kept)"
+  else
+    log_plain "  logs: off (LOGGING=0)"
+  fi
+}
+
+# run_user_tools_as_sudo_user: we are root via sudo; run the user-level
+# tools in a child process as SUDO_USER with that user's login environment.
+run_user_tools_as_sudo_user() {
+  local results childlog="" args=() rc=0 color=never rfd cfd=""
+  # Root creates the files the child reports through, hands them to the
+  # user, and reads them back through descriptors opened now, not by path:
+  # by the time root reads, a path in /tmp could have been replaced.
+  results=$(tmp_file) || return 1
+  exec {rfd}<"$results"
+  chown "$SU_USER" "$results" 2>/dev/null || true
+  # The child cannot write to root's log; it logs to a file of its own that
+  # is appended to this run's log afterwards.
+  if [ -n "$SU_LOG_FILE" ] && childlog=$(tmp_file); then
+    exec {cfd}<"$childlog"
+    chown "$SU_USER" "$childlog" 2>/dev/null || true
+  else
+    childlog=""
+  fi
+  [ "$SU_USE_COLOR" = 1 ] && color=always
+  args=(--_user-tools --color "$color" --timeout "$SU_TIMEOUT")
+  [ "$SU_DRY_RUN" = 1 ] && args+=(--dry-run)
+  [ "$SU_DETAILED" = 1 ] && args+=(--detailed)
+  [ "$SU_VERBOSE" = 1 ] && args+=(--verbose)
+  [ "$SU_QUIET" = 1 ] && args+=(--quiet)
+  [ -n "$SU_ONLY" ] && args+=(--only "$SU_ONLY")
+  [ -n "$SU_SKIP" ] && args+=(--skip "$SU_SKIP")
+  [ -n "$SU_CONFIG_FILE" ] && args+=(--config "$SU_CONFIG_FILE")
+  cfg_bool PRUNE_NODE && args+=(--prune-node)
+  cfg_bool ALLOW_UNVERIFIED_INSTALLERS && args+=(--allow-unverified-installers)
+  cfg_bool AUTOREMOVE || args+=(--no-autoremove)
+  cfg_bool NVIM_PLUGINS && args+=(--nvim-plugins)
+  cfg_bool RUNTIMES && args+=(--runtimes)
+  cfg_bool NPM_GLOBALS && args+=(--npm-globals)
+  cfg_bool CONTAINERS && args+=(--containers)
+  if [ -n "$childlog" ]; then args+=(--log "$childlog"); else args+=(--no-log); fi
+
+  log_info "running user-level tools as $SU_USER"
+  local -a envp=(env -i "HOME=$SU_USER_HOME" "USER=$SU_USER" "LOGNAME=$SU_USER"
+    "PATH=/usr/local/bin:/usr/bin:/bin" "TERM=${TERM:-dumb}" "LANG=${LANG:-C.UTF-8}"
+    "SU_RESULTS_OUT=$results" "NO_COLOR=${NO_COLOR:-}" "SU_GITHUB_API=$SU_GITHUB_API")
+  [ -n "${LC_ALL:-}" ] && envp+=("LC_ALL=$LC_ALL")
+  # The GitHub token travels on the child's stdin, never on a command line
+  # (ps shows those to every user): the child puts the line it reads into
+  # its environment before the login shell starts, config_load takes it
+  # from there, and main() unsets it again so the tools do not inherit it.
+  # stdin is /dev/null from the login shell on.
+  # shellcheck disable=SC2016  # $0/$@ are expanded by the child bash on purpose
+  local child='IFS= read -r GITHUB_TOKEN || GITHUB_TOKEN=""; export GITHUB_TOKEN; exec </dev/null; exec bash -lc '"'"'exec "$0" "$@"'"'"' "$0" "$@"'
+  if has_cmd runuser; then
+    printf '%s\n' "$(cfg GITHUB_TOKEN)" | runuser -u "$SU_USER" -- "${envp[@]}" bash -c "$child" "$SU_BIN" "${args[@]}" || rc=$?
+  else
+    printf '%s\n' "$(cfg GITHUB_TOKEN)" | sudo -n -u "$SU_USER" -H -- "${envp[@]}" bash -c "$child" "$SU_BIN" "${args[@]}" || rc=$?
+  fi
+  runner_import_file "/dev/fd/$rfd"
+  [ -n "$childlog" ] && runlog_append "/dev/fd/$cfd"
+  if [ "$rc" -ne 0 ] && [ ! -s "/dev/fd/$rfd" ]; then
+    runner_record "user-tools" failed "child process for $SU_USER exited with $rc"
+  fi
+  exec {rfd}<&-
+  [ -n "$cfd" ] && exec {cfd}<&-
+  return 0
+}
+
+main() {
+  local rc=0 need_sudo=0
+
+  user_init
+  if ! args_parse "$@"; then
+    log_plain ""
+    usage >&2
+    exit 2
+  fi
+  if [ "$SU_ARG_HELP" = 1 ]; then usage; exit 0; fi
+  # Output that other programs read (the completion sources --completion
+  # and splits --_steps) needs no configuration, so it is printed before a
+  # config warning could land on stdout next to it.
+  if [ "$SU_ARG_VERSION" = 1 ]; then version_string; exit 0; fi
+  if [ -n "$SU_ARG_COMPLETION" ]; then completion_main "$SU_ARG_COMPLETION"; exit $?; fi
+  if [ "$SU_ARG_STEPS" = 1 ]; then tools_step_names; exit 0; fi
+
+  # Run from / with absolute paths for the files we were given. The current
+  # directory may be shared (/tmp) or someone else's, and mise, asdf, cargo,
+  # pnpm, bun and npm read configuration from the directory they run in.
+  [ -n "$SU_CONFIG_FILE" ] && [[ "$SU_CONFIG_FILE" != /* ]] && SU_CONFIG_FILE="$PWD/$SU_CONFIG_FILE"
+  [ -n "$SU_LOG_PATH" ] && [[ "$SU_LOG_PATH" != /* ]] && SU_LOG_PATH="$PWD/$SU_LOG_PATH"
+  cd / || exit 1
+
+  config_load
+  args_apply || exit 2
+  if [ "$SU_ARG_USER_TOOLS" = 1 ]; then
+    # The token arrived through the environment (run_user_tools_as_sudo_user)
+    # and config_load has it now; the tools run below must not inherit it.
+    unset GITHUB_TOKEN GH_TOKEN
+  fi
+  # --quiet hides third-party output (it is still in the run log). Our own
+  # lines go to the console descriptor SU_OUT and are unaffected.
+  [ "$SU_QUIET" = 1 ] && exec >/dev/null 2>&1
+  gh_init || exit 1
+
+  os_detect
+
+  if [ "$SU_ARG_SELF_UPDATE" = 1 ]; then
+    selfupdate_main || exit 1
+    exit 0
+  fi
+
+  if [ "$SU_ARG_USER_TOOLS" = 1 ]; then
+    # Child process: only the invoking user's tools, results go to SU_RESULTS_OUT.
+    runlog_open
+    tools_discover
+    tools_run_all user
+    runlog_close 0
+    exit 0
+  fi
+
+  tools_discover
+  if [ "$SU_ARG_LIST" = 1 ]; then list_main; exit 0; fi
+  runlog_open "$@"
+
+  log_plain "${C_BOLD}$(version_string)${C_RESET} on $(os_describe)"
+  if [ "$SU_DRY_RUN" = 1 ]; then
+    log_plain "${C_MAGENTA}dry run$([ "$SU_DETAILED" = 1 ] && printf ' (detailed)'): nothing will be changed${C_RESET}"
+  fi
+  [ "$SU_YES" = 1 ] && log_detail "--yes given (package managers never prompt anyway)"
+  has_cmd curl || log_warn "curl is not installed: GitHub release lookups and downloads will be skipped"
+
+  # Decide whether sudo credentials are needed up front.
+  if ! is_root && has_cmd sudo; then
+    if step_enabled system "$SU_PKG" pkg && pkg_supported; then
+      if [ "$SU_DRY_RUN" != 1 ] || pkg_dry_needs_root; then need_sudo=1; fi
+    fi
+    if [ "$need_sudo" = 1 ]; then
+      sudo_prime || log_warn "sudo is not available; system package steps will be skipped"
+    fi
+  fi
+
+  run_step system "$SU_PKG" pkg_update_step
+  run_step extras flatpak flatpak_step
+  run_step extras snap snap_step
+  run_step extras firmware fwupd_step
+
+  if step_enabled tools tools; then
+    json_ensure_jq || true
+  fi
+
+  if is_root && [ "$SU_USER_VIA_SUDO" = 1 ]; then
+    tools_run_all system
+    run_user_tools_as_sudo_user
+  else
+    if is_root && [ ${#SU_TOOLS[@]} -gt 0 ]; then
+      log_warn "running as root without SUDO_USER: user-level tools are root's own installations"
+    fi
+    tools_run_all all
+  fi
+
+  run_step extras reboot-check reboot_check_step
+
+  summary_print || rc=1
+  [ -n "$SU_LOG_FILE" ] && log_plain "  log: $SU_LOG_FILE"
+  runlog_close "$rc"
+  exit "$rc"
+}
+
+main "$@"

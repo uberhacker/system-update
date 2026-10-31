@@ -1,0 +1,20 @@
+Devices with no available firmware updates:
+ • System Firmware
+ • UEFI Device Firmware
+Devices with the latest available firmware version:
+ • UEFI CA
+Example Vendor System Product Name
+│
+└─UEFI dbx:
+  │   Device ID:          0000000000000000000000000000000000000000
+  │   Summary:            UEFI revocation database
+  │   Current version:    20260402
+  │   Minimum Version:    20260402
+  │   Vendor:             Microsoft (UEFI:Microsoft)
+  │   Device Flags:       • Internal device
+  │                       • Updatable
+  │ 
+  └─Secure Boot dbx Configuration Update:
+        New version:      20260707
+        Remote ID:        lvfs
+        Release ID:       150556

@@ -1,0 +1,4 @@
+tests/vendor/
+tests/containers.out/
+*.swp
+dist/

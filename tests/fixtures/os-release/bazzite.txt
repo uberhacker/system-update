@@ -1,0 +1,7 @@
+NAME="Bazzite"
+VERSION="41.20241110 (Bazzite)"
+ID=bazzite
+ID_LIKE="fedora"
+VERSION_ID=41
+PRETTY_NAME="Bazzite 41 (FROM Fedora Kinoite)"
+VARIANT_ID=kinoite

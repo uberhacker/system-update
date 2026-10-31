@@ -1,0 +1,2 @@
+{"ref": "refs/tags/v1.0.0", "node_id": "x", "url": "https://api.github.com/repos/example/annotated/git/refs/tags/v1.0.0",
+ "object": {"sha": "1111111111111111111111111111111111111111", "type": "tag", "url": "https://api.github.com/repos/example/annotated/git/tags/1111111111111111111111111111111111111111"}}
