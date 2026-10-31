@@ -13,7 +13,7 @@ Updates [Ollama](https://ollama.com). A distro-packaged Ollama is left to the sy
 
 1. A binary owned by a distro package: skipped (updated with the system packages).
 2. Reads the installed version (`ollama -v`) and the latest GitHub release of `ollama/ollama`. Nothing happens if it is current.
-3. Runs the vendor installer only when Ollama was evidently installed by it (`/etc/systemd/system/ollama.service` exists and the binary is under `/usr/local` or `/usr/bin` without a package owner) **or** with `--allow-unverified-installers`.
+3. Runs the vendor installer only with `--allow-unverified-installers`. Without it the step is skipped with the versions, and says when Ollama was evidently installed by that installer (`/etc/systemd/system/ollama.service` exists and the binary is under `/usr/local` or `/usr/bin` without a package owner).
 4. Downloads `https://ollama.com/install.sh`, checks it parses as shell, and runs it as root.
 
 ## What will be affected
@@ -37,4 +37,4 @@ Both report `would run the ollama installer as root (OLD -> NEW)`, or `OLD -> NE
 
 ## Skipped when
 
-* Owned by a distro package; installed some other way without `--allow-unverified-installers`; no `sudo`; version unreadable; latest release unknown.
+* Owned by a distro package; `--allow-unverified-installers` not given; no `sudo`; version unreadable; latest release unknown.

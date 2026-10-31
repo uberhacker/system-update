@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
-# The per-run log file (lib/core/runlog.sh, _log_file, _run_logged).
+# The per-run log file (lib/core/runlog.sh, _log_file, _run_logged). The log
+# is written by path: no descriptor stays open for commands to inherit.
 
 load ../test_helper
 
@@ -15,8 +16,7 @@ setup() {
 }
 
 teardown() {
-  [ -n "${SU_LOG_FD:-}" ] && exec {SU_LOG_FD}>&-
-  SU_LOG_FD=""
+  SU_LOG_FILE=""
   declare -F tmp_cleanup >/dev/null && tmp_cleanup
   return 0
 }
@@ -42,7 +42,7 @@ open_log() {
   config_set LOG_DIR "$LOGS" test
   args_apply
   runlog_open
-  assert_equal "" "$SU_LOG_FD"
+  assert_equal "" "$SU_LOG_FILE"
   [ ! -e "$LOGS" ]
 }
 
@@ -80,6 +80,12 @@ open_log() {
   assert_contains "$output" "to-stdout"
   assert_contains "$output" "to-stderr"
   assert_contains "$output" "-> exit 3 after"
+}
+
+@test "a command run while logging does not inherit a descriptor for the log" {
+  open_log
+  run run_user bash -c 'ls -l /proc/$$/fd'
+  assert_not_contains "$output" "$(basename "$SU_LOG_FILE")"
 }
 
 @test "without a log the runners behave exactly as before" {

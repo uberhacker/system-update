@@ -19,6 +19,8 @@ SU_ARG_SOURCE=""
 SU_ARG_BRANCH=""
 SU_ARG_VERSION=0
 SU_ARG_HELP=0
+SU_ARG_COMPLETION=""
+SU_ARG_STEPS=0           # internal: print the step names (for completion)
 SU_ARG_TIMEOUT=""
 SU_ARG_INSTALL_JQ=""
 SU_ARG_UNVERIFIED=""
@@ -74,6 +76,8 @@ Options:
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
+      --completion SHELL  print the bash completion script and exit
+                          (source <(system-update --completion bash))
       --version           print the version and exit
   -h, --help              show this help and exit
 
@@ -136,6 +140,8 @@ args_parse() {
       --source) args_need "$opt" "${2:-}" || return 2; SU_ARG_SOURCE="$2"; shift ;;
       --branch) args_need "$opt" "${2:-}" || return 2; SU_ARG_BRANCH="$2"; shift ;;
       --version|-V) SU_ARG_VERSION=1 ;;
+      --completion) args_need "$opt" "${2:-}" || return 2; SU_ARG_COMPLETION="$2"; shift ;;
+      --_steps) SU_ARG_STEPS=1 ;;
       -h|--help) SU_ARG_HELP=1 ;;
       --_user-tools) SU_ARG_USER_TOOLS=1 ;;
       --) shift; break ;;

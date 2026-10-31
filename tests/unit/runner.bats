@@ -160,6 +160,28 @@ s_silent() { :; }
   assert_contains "$output" "1 ok, 0 updated, 0 skipped, 0 failed"
 }
 
+@test "--quiet hides a tool's output but keeps the summary" {
+  local bindir="$BATS_TEST_TMPDIR/bin"
+  make_fake_bin "$bindir" kilo 'case "$1" in --version) echo 1.2.3;; upgrade) echo "CHATTER-FROM-THE-TOOL"; echo "NOISE-ON-STDERR" >&2;; esac'
+  PATH="$bindir:$PATH" SU_PKG_FALLBACK=0 SU_OS_RELEASE="$(fixture os-release/arch.txt)" \
+    run "$REPO_ROOT/bin/system-update" --only kilo --no-color --quiet
+  assert_equal 0 "$status"
+  assert_not_contains "$output" "CHATTER-FROM-THE-TOOL"
+  assert_not_contains "$output" "NOISE-ON-STDERR"
+  assert_contains "$output" "1 ok, 0 updated"
+}
+
+@test "run_root_opt runs as the user when sudo would need a password" {
+  local bindir="$BATS_TEST_TMPDIR/sudobin"
+  make_fake_bin "$bindir" sudo 'echo "sudo: a password is required" >&2; exit 1'
+  PATH="$bindir:$PATH"
+  SU_SUDO_OK=""; SU_SUDO_NOPROMPT=""
+  if is_root; then skip "running as root"; fi
+  run run_root_opt id -un
+  assert_equal 0 "$status"
+  assert_equal "$(id -un)" "${lines[-1]}"
+}
+
 @test "sudo_prime accepts a NOPASSWD rule even when sudo -v would ask" {
   local bindir="$BATS_TEST_TMPDIR/sudobin"
   # sudo -n true works (NOPASSWD), sudo -v fails (verifypw=all with another

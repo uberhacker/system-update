@@ -9,9 +9,12 @@
 #   * Colours are used only when stdout is a TTY, NO_COLOR is unset and
 #     --no-color was not given (or COLOR=always forces them on).
 #   * Icons are Unicode when the locale is UTF-8, plain ASCII otherwise.
-#   * With a run log open (SU_LOG_FD, see lib/core/runlog.sh) every line is
-#     also written there, timestamped and without colours, including what
-#     --quiet hides and the verbose-only lines (commands, details).
+#   * With a run log open (SU_LOG_FILE, see lib/core/runlog.sh) every line is
+#     also appended there, timestamped and without colours, including what
+#     --quiet hides and the verbose-only lines (commands, details). The log
+#     is written by path, never through a kept-open descriptor: commands
+#     this program runs would inherit such a descriptor (runuser passes
+#     them on), and a package's scripts have no business holding our log.
 
 : "${SU_VERBOSE:=0}"
 : "${SU_QUIET:=0}"
@@ -69,20 +72,21 @@ log_init() {
   fi
 }
 
-SU_LOG_FD="${SU_LOG_FD:-}"
+SU_LOG_FILE="${SU_LOG_FILE:-}"
 
 # _log_file TEXT: append TEXT to the run log, if one is open: a timestamp,
 # then the text with colour escapes removed.
 _log_file() {
-  [ -n "$SU_LOG_FD" ] || return 0
-  local s="$*" esc=$'\033'
-  while [[ "$s" == *"$esc["* ]] && [[ "$s" =~ $esc\[[0-9\;]*m ]]; do
+  [ -n "$SU_LOG_FILE" ] || return 0
+  local s="$*" esc=$'\033' re
+  re="$esc"'\[[0-9;]*m'
+  while [[ "$s" == *"$esc["* ]] && [[ "$s" =~ $re ]]; do
     s="${s//"${BASH_REMATCH[0]}"/}"
   done
   if [ -z "$s" ]; then
-    printf '\n' >&"$SU_LOG_FD"
+    printf '\n' >> "$SU_LOG_FILE"
   else
-    printf '%(%H:%M:%S)T %s\n' -1 "$s" >&"$SU_LOG_FD"
+    printf '%(%H:%M:%S)T %s\n' -1 "$s" >> "$SU_LOG_FILE"
   fi
 }
 

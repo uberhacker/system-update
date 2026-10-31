@@ -27,7 +27,7 @@ openSUSE and SUSE Linux Enterprise.
 
 `--dry-run` refreshes the repositories (root) and runs the same command with `--dry-run`, reporting `N package(s) would be upgraded/installed`.
 
-`--detailed` adds `--details` and lists each package that would be upgraded, downgraded, newly installed or removed:
+`--detailed` adds `--details` and lists each package that would be upgraded, downgraded, newly installed or removed (the table replaces zypper's own, much longer, listing on the terminal; the run log still has it):
 
 ```
   ◦ 13 package(s) would change:

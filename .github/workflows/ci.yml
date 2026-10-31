@@ -4,6 +4,13 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+env:
+  BATS_REPO: https://github.com/bats-core/bats-core.git
+  BATS_COMMIT: eb7f42f8d608ac693d7a4b67474f6714ea68cfc5   # v1.14.0
+
 jobs:
   lint:
     name: shellcheck and bash -n
@@ -19,11 +26,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch bats-core
-        run: git clone --depth 1 https://github.com/bats-core/bats-core.git tests/vendor/bats-core
+      - name: Fetch bats-core (pinned)
+        run: |
+          git init -q tests/vendor/bats-core
+          git -C tests/vendor/bats-core fetch -q --depth 1 "$BATS_REPO" "$BATS_COMMIT"
+          git -C tests/vendor/bats-core checkout -q FETCH_HEAD
       - run: tests/run.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bundle:
+    name: single-file build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./build.sh dist/system-update
+      - run: dist/system-update --version && dist/system-update --list
+      - uses: actions/upload-artifact@v4
+        with:
+          name: system-update-single-file
+          path: dist/system-update
 
   containers:
     name: ${{ matrix.image }}

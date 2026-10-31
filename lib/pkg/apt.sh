@@ -62,7 +62,7 @@ pkg_apt_update() {
   log=$(tmp_file) || return 1
 
   if [ "$SU_DRY_RUN" = 1 ]; then
-    if is_root || sudo -n true 2>/dev/null; then
+    if sudo_usable; then
       apt_refresh || refresh=$?
       if [ "$refresh" -eq 1 ]; then
         step_fail "$APT_REFRESH_NOTE"
@@ -72,7 +72,7 @@ pkg_apt_update() {
     else
       log_warn "cannot refresh package lists without a password; simulating with the cached lists"
     fi
-    run_capture "$log" run_root "${APT_ENV[@]}" apt-get -s -q dist-upgrade || rc=$?
+    run_capture "$log" run_root_opt "${APT_ENV[@]}" apt-get -s -q dist-upgrade || rc=$?
     if [ "$rc" -ne 0 ]; then
       step_fail "apt-get -s dist-upgrade failed ($(rc_note "$rc"))"
       return 0

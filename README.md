@@ -69,7 +69,7 @@ update recipes are his; see [Changes from the original](#changes-from-the-origin
 * [Dry run and `--detailed`](#dry-run-and---detailed)
 * [System packages](#system-packages) and [extras](#flatpak-snap-firmware-and-the-reboot-check)
 * [Third-party tools](#third-party-tools)
-* [Installation](#installation) and [tab completion](#tab-completion)
+* [Installation](#installation), [single file](#single-file) and [tab completion](#tab-completion)
 * [Usage](#usage), [privileges](#privileges) and [examples](#examples)
 * [Configuration](#configuration) · [Logs](#logs) · [Self-update](#self-update)
 * [Running it unattended](#running-it-unattended) · [Troubleshooting](#troubleshooting)
@@ -187,7 +187,9 @@ managers only refresh metadata and simulate (`apt-get -s`,
 `dnf check-upgrade`, `zypper --dry-run`, `checkupdates`, `apk upgrade -s`,
 `xbps-install -Sun`, `emerge --pretend`, `rpm-ostree upgrade --check`), and
 each tool reports what it would run. Nothing is installed, removed or
-auto-removed. A few steps refresh metadata the same way to find out what
+auto-removed. A user without `sudo` rights can dry-run apt, dnf, pacman and
+emerge too: their simulations run as that user with the cached package
+lists (zypper, rpm-ostree, apk and xbps need root even to check). A few steps refresh metadata the same way to find out what
 is pending: `brew update` (Homebrew's formula index) and `git fetch` in the
 Oh My Zsh / Oh My Bash checkouts. Those only update indexes and
 remote-tracking refs, never installed software.
@@ -240,7 +242,7 @@ that could not be determined.
 | [snap](docs/snap.md) | `snap refresh --list` joined with `snap list` |
 | [firmware](docs/firmware.md) | `fwupdmgr get-updates` (current and new version per device) |
 | npm-installed CLIs, [claude](docs/claude.md), [codex](docs/codex.md), ... | `npm view <package> version` |
-| pipx / `uv tool` installed CLIs, [pip](docs/pip.md) | PyPI's JSON API |
+| pipx / `uv tool` installed CLIs, [pip](docs/pip.md) | PyPI's JSON API (needs `jq`; see `--install-jq`) |
 | [uv](docs/uv.md) | `uv tool list --outdated` |
 | [composer](docs/composer.md) | `composer global outdated --direct`, Composer's latest GitHub release |
 | [terminus](docs/terminus.md), [wp-cli](docs/wp-cli.md), [rvm](docs/rvm.md), [docker-compose](docs/docker-compose.md), [codium](docs/codium.md), [ollama](docs/ollama.md), [anythingllm](docs/anythingllm.md) | the latest GitHub release |
@@ -376,6 +378,42 @@ DIR` installs under `DIR/bin` and `DIR/share`, and `install.sh --uninstall`
 (with the same `--user`/`--prefix`) removes an installation. The checkout's
 `.git` directory is copied along so that `--self-update` can pull later.
 
+A system-wide installation is owned by root (the installer `chown`s it),
+because it is run with `sudo` and its completion file is sourced by every
+shell, including root's: no user account can edit it. `--self-update` of
+such an installation asks for `sudo` once. A `--user` installation is yours.
+
+### Single file
+
+The whole program also comes as **one executable file**, handy for copying
+to a server, a container or a USB stick. It is the same bash code with every
+module inlined (nothing is compiled), so it needs the same bash 4.4 and
+coreutils, and it behaves exactly like the installed version: the tests
+check that `--help`, `--list` and the dry-run plan are identical.
+
+From a release (each `v*` tag publishes `system-update` and its `.sha256`):
+
+```
+$ curl -fLO https://github.com/bradvrudney/system-update/releases/latest/download/system-update
+$ curl -fLO https://github.com/bradvrudney/system-update/releases/latest/download/system-update.sha256
+$ sha256sum -c system-update.sha256
+$ sudo install -m 0755 system-update /usr/local/bin/system-update
+```
+
+Or build it from a checkout:
+
+```
+$ ./build.sh                     # writes dist/system-update
+$ ./build.sh ~/bin/system-update # or anywhere else
+```
+
+`system-update --version` says `single file` and which commit it was built
+from. Tab completion is built in (`source <(system-update --completion bash)`,
+or save that output as `~/.local/share/bash-completion/completions/system-update`),
+and `--self-update` replaces the file with the latest release (see
+[Self-update](#self-update)). A build is never edited by hand: change the
+modules and rebuild.
+
 ### Tab completion
 
 `install.sh` links [bash completion](completions/system-update.bash) into
@@ -389,8 +427,8 @@ $ system-update --only apt,fl<Tab>       ->  --only apt,flatpak
 $ system-update --skip co<Tab><Tab>      ->  codex codium composer copilot
 ```
 
-Step names are read from the installation's `lib/tools/`, so new tools
-complete without changes. This needs the `bash-completion` package (installed
+Step names are asked of the command itself (`system-update --_steps`), so
+new tools complete without changes to the completion file. This needs the `bash-completion` package (installed
 by default on most desktops). Without installing, or in zsh:
 
 ```
@@ -441,6 +479,8 @@ Options:
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
+      --completion SHELL  print the bash completion script and exit
+                          (source <(system-update --completion bash))
       --version           print the version and exit
   -h, --help              show this help and exit
 ```
@@ -485,7 +525,12 @@ updated in root's own home, with a warning.
 
 Nothing in the script ever disables signature or TLS verification, downloads
 without a checksum, `chown`s system directories, or runs `curl | sh` without
-`--allow-unverified-installers`.
+`--allow-unverified-installers`. It runs from `/`, so configuration that
+tools such as mise, asdf, cargo and npm read from the current directory
+cannot come from a shared or foreign one. A `GITHUB_TOKEN` is never put on
+a command line (`ps` shows those to every user): curl reads it from a pipe,
+and under `sudo` it is handed to the user-level child over a pipe and
+removed from the environment before any tool runs.
 
 ### Examples
 
@@ -546,8 +591,9 @@ Every run (real or dry) writes a log file; the summary ends with its path:
   log: /home/you/.local/state/system-update/system-update-20261030-174821-1324223.log
 ```
 
-The terminal shows what you need to follow the run; the log has everything,
-so a failed step can be investigated after the fact:
+The terminal shows what you need to follow the run (`--quiet` keeps only
+this program's own lines; a tool's output then exists only in the log); the
+log has everything, so a failed step can be investigated after the fact:
 
 * **A header** describing the run: version and git commit, start time, host
   and kernel, distribution and package manager, user (and the user whose
@@ -601,6 +647,13 @@ never a reason to stop.
   `SELF_UPDATE_REPO` over https, checks that it looks like this program
   (`bin/system-update` present, every file passes `bash -n`), and swaps the
   directories atomically.
+* A [single file](#single-file): fetches `system-update.sha256` from the
+  repository's latest GitHub release and compares it with the file it is
+  running from; when they differ it downloads `system-update`, verifies it
+  against that checksum, checks that it parses and is a single-file build,
+  and renames it over the old file (as the file's owner, through `sudo` for
+  a root-owned `/usr/local/bin`). It follows releases, so `--branch` does not
+  apply; without a published checksum nothing is replaced.
 
 `--self-update --dry-run` fetches and checks but does not change anything.
 
@@ -693,7 +746,14 @@ summary ends with its path, and `latest.log` points at the newest. `-v`
 $ tests/lint.sh          # bash -n and shellcheck -x on everything
 $ tests/run.sh           # bats unit tests (bats-core is fetched into tests/vendor if missing)
 $ tests/containers.sh    # the real thing inside stock distro containers (needs docker)
+$ ./build.sh             # the single-file build, dist/system-update
 ```
+
+Releases: bump `VERSION`, commit, then tag and push it (`git tag v2.1.0 &&
+git push origin v2.1.0`). `.github/workflows/release.yml` runs the lint and
+unit tests, checks the tag matches `VERSION`, builds the single file and
+publishes it with its `.sha256` as a GitHub release. CI also uploads a
+build of every push as an artifact.
 
 The unit tests cover OS detection against `/etc/os-release` fixtures, the
 config parser (including hostile values), argument handling, colour and icon

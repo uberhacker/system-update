@@ -29,7 +29,7 @@ Nothing is ever `pip install`ed into the system interpreter.
 
 `--dry-run` lists what would run (`would run pipx upgrade-all`, ...).
 
-`--detailed` also lists each pipx package with a newer release on PyPI (`installed -> latest`), using `pipx list --short` and PyPI's JSON API (one HTTPS request per package, read-only).
+`--detailed` also lists each pipx package with a newer release on PyPI (`installed -> latest`), using `pipx list --short` and PyPI's JSON API (one HTTPS request per package, read-only). This needs `jq`: PyPI's answer is nested JSON that the built-in fallback parser cannot read, so without `jq` (or `--install-jq`) the list is simply empty.
 
 ## Warnings
 

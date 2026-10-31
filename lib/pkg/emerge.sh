@@ -40,7 +40,7 @@ pkg_emerge_update() {
   log_warn "Gentoo support is best effort: emerge --sync followed by emerge -uDN @world"
 
   if [ "$SU_DRY_RUN" = 1 ]; then
-    run_capture "$log" run_root emerge --pretend --update --deep --newuse --color n @world || rc=$?
+    run_capture "$log" run_root_opt emerge --pretend --update --deep --newuse --color n @world || rc=$?
     if [ "$rc" -ne 0 ]; then
       step_fail "emerge --pretend failed ($(rc_note "$rc"))"
       return 0

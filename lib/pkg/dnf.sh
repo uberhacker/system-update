@@ -13,14 +13,16 @@ dnf_cmd() {
 }
 
 # dnf_check LOGFILE: run the update check. Returns 100 when updates exist,
-# 0 when none, anything else is an error. Works for dnf5, dnf4 and yum.
+# 0 when none, anything else is an error. Works for dnf5, dnf4 and yum, and
+# as a plain user (the check needs no root; without sudo it uses the user's
+# own metadata cache).
 dnf_check() {
   local log="$1" dnf rc=0
   dnf=$(dnf_cmd) || return 1
   case "$dnf" in
-    dnf5) SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root dnf5 --refresh -q check-upgrade || rc=$? ;;
-    dnf)  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root dnf --refresh -q check-update || rc=$? ;;
-    yum)  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root yum -q check-update || rc=$? ;;
+    dnf5) SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root_opt dnf5 --refresh -q check-upgrade || rc=$? ;;
+    dnf)  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root_opt dnf --refresh -q check-update || rc=$? ;;
+    yum)  SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root_opt yum -q check-update || rc=$? ;;
   esac
   return "$rc"
 }

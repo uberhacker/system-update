@@ -55,14 +55,18 @@ gh_api() {
   fi
   hdr=$(mktemp "$dir/hdr.XXXXXX") || return 1
   token=$(cfg GITHUB_TOKEN 2>/dev/null || true)
-  local -a auth=()
-  [ -n "$token" ] && auth=(-H "Authorization: Bearer $token")
+  # The token goes to curl as a config file on stdin (-K -), never as an
+  # argument: `ps` shows every process's arguments to every user. Its
+  # characters are restricted by the config validator (token type), so the
+  # quoted curl config line cannot be broken out of.
+  local auth=""
+  [ -n "$token" ] && auth="header = \"Authorization: Bearer $token\""
   log_cmd "curl -fsSL ${SU_GITHUB_API}/${path}"
-  curl -fsSL --connect-timeout 20 --max-time 60 \
+  printf '%s\n' "$auth" | curl -fsSL --proto-redir '=https' --connect-timeout 20 --max-time 60 \
     -H 'Accept: application/vnd.github+json' \
     -H 'X-GitHub-Api-Version: 2022-11-28' \
-    "${auth[@]}" \
-    -D "$hdr" -o "$out" "${SU_GITHUB_API}/${path}" </dev/null || rc=$?
+    -K - \
+    -D "$hdr" -o "$out" "${SU_GITHUB_API}/${path}" || rc=$?
   # Header lines end in CRLF; drop the CR before comparing. (No awk: some
   # minimal images do not ship it.)
   read -r _ status _ <<< "$(grep -i '^HTTP/' "$hdr" 2>/dev/null | tail -n1 | tr -d '\r')"
@@ -152,7 +156,7 @@ gh_release_checksum() {
     fi
     sum=""
     case "$name" in
-      "$asset".*) read -r sum _ < "$file" || sum="" ;;
+      "$asset".*) sum=$(head -n1 "$file"); sum="${sum%%[[:space:]]*}" ;;   # "<hash>  name" or a bare hash
       *) sum=$(checksum_for "$file" "$asset") || sum="" ;;
     esac
     if [[ "${sum,,}" =~ ^[0-9a-f]{64}$ ]]; then

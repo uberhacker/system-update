@@ -84,3 +84,11 @@ EOF
   assert_contains "$output" "gh rc=1"
   [ ! -e "$BATS_TEST_TMPDIR/out" ]
 }
+
+@test "checksum_for finds the asset on a last line without a trailing newline" {
+  local f="$BATS_TEST_TMPDIR/sums"
+  printf '%s  other\n%s  wanted' "$(printf 'a%.0s' {1..64})" "$(printf 'b%.0s' {1..64})" > "$f"
+  run checksum_for "$f" wanted
+  assert_equal 0 "$status"
+  assert_equal "$(printf 'b%.0s' {1..64})" "$output"
+}

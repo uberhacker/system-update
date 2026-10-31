@@ -78,6 +78,20 @@ sudo_prime() {
   return 1
 }
 
+# sudo_usable: can we become root right now without a prompt? True when we
+# are root, when sudo_prime validated credentials, or when sudo -n works
+# (NOPASSWD or a cached timestamp). The probe runs once per process.
+SU_SUDO_NOPROMPT=""
+sudo_usable() {
+  is_root && return 0
+  [ "${SU_SUDO_OK:-}" = 1 ] && return 0
+  [ "${SU_SUDO_OK:-}" = 0 ] && return 1
+  if [ -z "$SU_SUDO_NOPROMPT" ]; then
+    if has_cmd sudo && sudo -n true 2>/dev/null; then SU_SUDO_NOPROMPT=1; else SU_SUDO_NOPROMPT=0; fi
+  fi
+  [ "$SU_SUDO_NOPROMPT" = 1 ]
+}
+
 # root_prefix: prints the words needed to run something as root, if any.
 # Usage: "$(root_prefix)" cmd ...  -- but prefer run_root below.
 root_prefix() {
@@ -94,6 +108,10 @@ root_prefix() {
 #   run_user   cmd...   run as the invoking user. Always runs.
 #   do_root    cmd...   like run_root, but only reports in dry-run mode.
 #   do_user    cmd...   like run_user, but only reports in dry-run mode.
+#   run_root_opt cmd... as root when that needs no prompt, else as ourselves:
+#                       for commands that work either way (apt-get -s,
+#                       dnf check-upgrade), so a dry run does not fail for a
+#                       user without sudo rights.
 # Env: SU_RUN_TIMEOUT overrides the timeout for one call.
 # With a run log open, each command's output also goes to the log, followed
 # by its exit status and duration.
@@ -111,11 +129,11 @@ _timeout_cmd() {
 # write to a pipe rather than the terminal, so TTY-only progress bars are not
 # shown. (stderr is copied asynchronously and may land a line late.)
 _run_logged() {
-  [ -n "${SU_LOG_FD:-}" ] || { "$@"; return; }
-  local rc start=$SECONDS
-  { "$@" 2> >(tee -a "/dev/fd/$SU_LOG_FD" >&2); } | tee -a "/dev/fd/$SU_LOG_FD"
+  [ -n "${SU_LOG_FILE:-}" ] || { "$@"; return; }
+  local rc start=$SECONDS log="$SU_LOG_FILE"
+  { "$@" 2> >(tee -a "$log" >&2); } | tee -a "$log"
   rc=${PIPESTATUS[0]}
-  printf '%(%H:%M:%S)T   -> exit %s after %ss\n' -1 "$rc" "$((SECONDS - start))" >&"$SU_LOG_FD"
+  printf '%(%H:%M:%S)T   -> exit %s after %ss\n' -1 "$rc" "$((SECONDS - start))" >> "$log"
   return "$rc"
 }
 
@@ -153,6 +171,15 @@ run_user() {
       # shellcheck disable=SC2086
       _run_logged $tmo sudo -n -u "$SU_USER" -H -- "$@" </dev/null
     fi
+  fi
+}
+
+run_root_opt() {
+  if sudo_usable; then
+    run_root "$@"
+  else
+    log_detail "no sudo credentials; running as $SU_CUR_USER: $*"
+    run_user "$@"
   fi
 }
 
@@ -225,7 +252,9 @@ download() {
   esac
   has_cmd curl || { log_error "curl is not installed; cannot download $url"; return 1; }
   log_cmd "curl -fsSL $url"
-  if ! curl -fsSL --retry 2 --connect-timeout 20 --max-time "${SU_TIMEOUT}" \
+  # --proto-redir: a redirect may not downgrade to http (file: is the test hook).
+  if ! curl -fsSL --proto '=https,file' --proto-redir '=https' \
+      --retry 2 --connect-timeout 20 --max-time "${SU_TIMEOUT}" \
       -o "$dest" "$url" </dev/null; then
     log_error "download failed: $url"
     rm -f -- "$dest"
@@ -250,7 +279,7 @@ sha256_of() {
 # a line like "<hash>  filename".
 verify_sha256() {
   local file="$1" expected="$2" actual
-  expected=${expected%% *}
+  expected=${expected%%[[:space:]]*}
   expected=${expected,,}
   if ! [[ "$expected" =~ ^[0-9a-f]{64}$ ]]; then
     log_error "no valid sha256 checksum available for $(basename "$file")"
@@ -269,7 +298,8 @@ verify_sha256() {
 # "sha256sum"-style checksums file (hash, whitespace, optional '*', name).
 checksum_for() {
   local file="$1" name="$2" hash f _rest
-  while read -r hash f _rest; do
+  # `|| [ -n "$hash" ]`: a last line without a newline still counts.
+  while read -r hash f _rest || [ -n "$hash" ]; do
     f=${f#\*}
     f=${f#./}
     if [ -n "$hash" ] && [ "$f" = "$name" ]; then

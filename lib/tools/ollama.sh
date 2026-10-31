@@ -3,9 +3,11 @@
 #
 # Distro package -> updated with the system packages. Otherwise the only
 # update path is the vendor's install.sh, which needs root and cannot be
-# verified. It runs only when ollama was evidently installed by it (the
-# installer's systemd unit exists and the binary is under /usr/local or
-# /usr/bin without a package owner) or with ALLOW_UNVERIFIED_INSTALLERS=1.
+# verified (no checksum or signature is published), so it runs only with
+# ALLOW_UNVERIFIED_INSTALLERS=1 (--allow-unverified-installers), as the
+# README promises for every vendor installer. When ollama was evidently
+# installed by that installer (its systemd unit exists and the binary is
+# under /usr/local or /usr/bin without a package owner) the skip says so.
 # Nothing is chown'ed afterwards.
 
 OLLAMA_INSTALLER="https://ollama.com/install.sh"
@@ -36,8 +38,12 @@ tool_ollama_update() {
     step_ok "up to date ($installed)"
     return 0
   fi
-  if [ "$by_installer" != 1 ] && ! cfg_bool ALLOW_UNVERIFIED_INSTALLERS; then
-    step_skip "$installed -> $latest available; install method unknown and the vendor installer is unverified, rerun with --allow-unverified-installers"
+  if ! cfg_bool ALLOW_UNVERIFIED_INSTALLERS; then
+    if [ "$by_installer" = 1 ]; then
+      step_skip "$installed -> $latest available; the vendor installer that installed ollama cannot be verified, rerun with --allow-unverified-installers to run it again"
+    else
+      step_skip "$installed -> $latest available; install method unknown and the vendor installer is unverified, rerun with --allow-unverified-installers"
+    fi
     return 0
   fi
   if ! sudo_available; then

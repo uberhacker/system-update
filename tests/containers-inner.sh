@@ -168,6 +168,33 @@ if phase_enabled dry-run; then
   fi
 fi
 
+# ---------------------------------------------------------------- bundle
+# The single-file build, made inside the container (git is not needed), must
+# detect the same things and plan the same dry run as the multi-file tree.
+if phase_enabled bundle; then
+  section "single-file build"
+  bundle=/tmp/system-update-bundle
+  if ! out=$("$SRC/build.sh" "$bundle" 2>&1); then
+    printf '%s\n' "$out"
+    result bundle fail "build.sh failed"
+  else
+    printf '%s\n' "$out"
+    a=$("$SU" --list --no-color --no-log 2>&1 | tail -n +2)
+    b=$("$bundle" --list --no-color --no-log 2>&1 | tail -n +2)
+    da=$("$SU" --dry-run --no-color --no-log 2>&1 | sed -n '/^Summary/,$p')
+    db=$("$bundle" --dry-run --no-color --no-log 2>&1 | sed -n '/^Summary/,$p')
+    if [ "$a" != "$b" ]; then
+      diff <(printf '%s\n' "$a") <(printf '%s\n' "$b") 2>/dev/null || printf 'multi:\n%s\nbundle:\n%s\n' "$a" "$b"
+      result bundle fail "--list differs"
+    elif [ "$da" != "$db" ]; then
+      printf 'multi:\n%s\nbundle:\n%s\n' "$da" "$db"
+      result bundle fail "dry-run summary differs"
+    else
+      result bundle pass "$("$bundle" --version)"
+    fi
+  fi
+fi
+
 # ---------------------------------------------------------------- detailed
 # --detailed lists each pending package with its versions. With a staged
 # downgrade (apt, dnf) that package must show up as a row of the table.

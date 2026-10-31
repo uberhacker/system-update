@@ -7,6 +7,10 @@
 #                (entry point present, bash -n passes) and swap the directory
 #                in with two renames. Never `reset --hard`, never chown system
 #                directories to the user.
+# Single file:   download the latest release's `system-update` asset and its
+#                `.sha256`, verify, check it is a single-file build, and
+#                rename it over this file (never written in place: bash reads
+#                a script while running it).
 #
 # Branch: SELF_UPDATE_BRANCH when set; otherwise the checkout's current branch
 # if the remote has it; otherwise the remote's default branch (git ls-remote
@@ -173,7 +177,7 @@ selfupdate_tarball() {
   if [ -z "$branch" ]; then
     branch=$(selfupdate_remote_default_branch "$repo") || branch="$SU_SELF_UPDATE_FALLBACK_BRANCH"
   fi
-  url="${repo}/archive/refs/heads/${branch}.tar.gz"
+  url="${repo%.git}/archive/refs/heads/${branch}.tar.gz"
   old_ver=$(cat "$root/VERSION" 2>/dev/null || echo unknown)
   log_info "source: $url"
   log_info "installed: $old_ver (not a git checkout)"
@@ -215,14 +219,81 @@ selfupdate_tarball() {
   return 0
 }
 
+# selfupdate_bundle FILE REPO: replace a single-file build with the newest
+# release asset. Releases are built by .github/workflows/release.yml. The
+# published .sha256 is fetched first and compared with this file: nothing
+# else is downloaded when they match. The asset is then verified against
+# that checksum, checked to parse and to be a single-file build, and
+# renamed over FILE (never written in place: bash reads a script while
+# running it).
+selfupdate_bundle() {
+  local self="$1" repo="${2%.git}" url tmp sum mine new_commit new_ver dir staged
+  url="$repo/releases/latest/download/system-update"
+  [ -n "$(cfg SELF_UPDATE_BRANCH)" ] && log_warn "SELF_UPDATE_BRANCH/--branch is ignored for a single-file build (it follows releases)"
+  log_info "source: $url"
+  log_info "installed: $(version_string)"
+
+  tmp=$(tmp_dir) || return 1
+  if ! download "$url.sha256" "$tmp/system-update.sha256"; then
+    log_error "no system-update.sha256 is published with the latest release; refusing an unverified update"
+    return 1
+  fi
+  sum=$(head -n1 "$tmp/system-update.sha256"); sum="${sum%%[[:space:]]*}"; sum="${sum,,}"
+  [[ "$sum" =~ ^[0-9a-f]{64}$ ]] || { log_error "the published system-update.sha256 does not contain a sha256"; return 1; }
+  mine=$(sha256_of "$self") || { log_error "no sha256 tool available"; return 1; }
+  if [ "$mine" = "$sum" ]; then
+    log_ok "already up to date: $(version_string)"
+    return 0
+  fi
+
+  download "$url" "$tmp/system-update" || return 1
+  verify_sha256 "$tmp/system-update" "$sum" || return 1
+  bash -n "$tmp/system-update" || { log_error "the downloaded file does not parse; $self left untouched"; return 1; }
+  grep -q '^SU_BUNDLED=1$' "$tmp/system-update" || { log_error "the downloaded file is not a single-file build of system-update; $self left untouched"; return 1; }
+  new_ver=$(sed -n "s/^SU_BUNDLE_VERSION='\\(.*\\)'$/\\1/p" "$tmp/system-update" | head -n1)
+  new_commit=$(sed -n "s/^SU_BUNDLE_COMMIT='\\(.*\\)'$/\\1/p" "$tmp/system-update" | head -n1)
+
+  if [ "$SU_DRY_RUN" = 1 ]; then
+    log_dry "would replace $self: ${SU_BUNDLE_VERSION:-?} (git ${SU_BUNDLE_COMMIT:-?}) -> ${new_ver:-?} (git ${new_commit:-?})"
+    return 0
+  fi
+
+  # Stage next to the target (same filesystem, so mv is an atomic rename),
+  # as the file's owner; the temp copy must be readable by that owner.
+  dir=$(dirname "$self")
+  staged="$dir/.system-update.new.$$"
+  chmod 0755 "$tmp" && chmod 0644 "$tmp/system-update"
+  _su_as_owner "$self" install -m 0755 "$tmp/system-update" "$staged" || { log_error "could not write to $dir"; return 1; }
+  if ! _su_as_owner "$self" mv -f -- "$staged" "$self"; then
+    _su_as_owner "$self" rm -f -- "$staged"
+    log_error "could not replace $self"
+    return 1
+  fi
+  log_updated "updated ${SU_BUNDLE_VERSION:-?} (git ${SU_BUNDLE_COMMIT:-?}) -> ${new_ver:-?} (git ${new_commit:-?})"
+  return 0
+}
+
 # selfupdate_main: entry for --self-update.
 selfupdate_main() {
-  local repo branch root="$SU_ROOT"
+  local repo branch root="$SU_ROOT" target
   repo=$(cfg SELF_UPDATE_REPO)
   branch=$(cfg SELF_UPDATE_BRANCH)
   selfupdate_source_ok "$repo" || return 1
   log_step "self-update"
-  if [ -e "$root/.git" ]; then
+  # A root-owned installation is updated as root; ask for sudo once, up
+  # front, instead of failing later inside `sudo -n`.
+  if [ "${SU_BUNDLED:-0}" = 1 ]; then target="$SU_BIN"; else target="$root"; fi
+  if ! is_root && [ "$(_su_owner "$target")" = root ]; then
+    if ! has_cmd sudo; then
+      log_error "$target is owned by root and sudo is not available"
+      return 1
+    fi
+    log_info "$target is owned by root; sudo is required to update it"
+    sudo_prime || { log_error "sudo credentials unavailable; nothing changed"; return 1; }
+  fi
+  if [ "${SU_BUNDLED:-0}" = 1 ]; then
+    selfupdate_bundle "$SU_BIN" "$repo"
+  elif [ -e "$root/.git" ]; then
     has_cmd git || { log_error "git is required to update a git checkout"; return 1; }
     selfupdate_git "$root" "$repo" "$branch"
   else

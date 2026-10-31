@@ -9,8 +9,12 @@
 #   ./install.sh --uninstall  remove the installation (combine with --user/--prefix)
 #
 # The whole checkout is copied, including .git when present, so that
-# `system-update --self-update` can fast-forward the installed copy. Bash
-# completion is linked into bash-completion's directory for the same prefix
+# `system-update --self-update` can fast-forward the installed copy. A
+# system-wide installation (made as root, or into a directory only root can
+# write) is owned by root: it is run with sudo and its completion file is
+# sourced by every user's shell, root's included, so no user account may be
+# able to edit it; --self-update then asks for sudo. Bash completion is
+# linked into bash-completion's directory for the same prefix
 # (DIR/share/bash-completion/completions, or the user's XDG data dir).
 
 set -euo pipefail
@@ -42,6 +46,13 @@ case "$MODE" in
   prefix) BIN_DIR="$PREFIX/bin"; SHARE_DIR="$PREFIX/share/system-update" ;;
 esac
 LINK="$BIN_DIR/system-update"
+# system_owned: does this installation belong to root (see the header)?
+system_owned() {
+  [ "$(id -u)" -eq 0 ] && return 0
+  local dir="$SHARE_DIR"
+  while [ ! -e "$dir" ]; do dir=$(dirname "$dir"); done
+  [ ! -w "$dir" ]
+}
 case "$MODE" in
   user) COMP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions" ;;
   *) COMP_DIR="$PREFIX/share/bash-completion/completions" ;;
@@ -97,6 +108,9 @@ for item in bin lib completions system-update VERSION LICENSE README.md config.e
   [ -e "$SRC/$item" ] || continue
   priv "$SHARE_DIR" cp -a "$SRC/$item" "$staging/"
 done
+if system_owned; then
+  priv "$SHARE_DIR" chown -R 0:0 "$staging"
+fi
 if [ -d "$SHARE_DIR" ]; then
   priv "$SHARE_DIR" rm -rf "$SHARE_DIR.old"
   priv "$SHARE_DIR" mv "$SHARE_DIR" "$SHARE_DIR.old"

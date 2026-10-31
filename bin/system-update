@@ -26,20 +26,32 @@ for _su_cmd in timeout mktemp install readlink grep sed sort; do
 done
 unset _su_cmd
 
-# su_resolve_root: directory above bin/, following symlinks to this file.
-su_resolve_root() {
+# su_resolve_self: absolute path of this file, following symlinks.
+su_resolve_self() {
   local src="${BASH_SOURCE[0]}" dir
   while [ -L "$src" ]; do
     dir=$(cd -P "$(dirname "$src")" && pwd)
     src=$(readlink "$src")
     [[ "$src" != /* ]] && src="$dir/$src"
   done
-  cd -P "$(dirname "$src")/.." && pwd
+  printf '%s/%s\n' "$(cd -P "$(dirname "$src")" && pwd)" "$(basename "$src")"
 }
-SU_ROOT=$(su_resolve_root)
+# SU_BIN is this program (re-run for the user-level tools under sudo).
+# SU_ROOT is the tree it was loaded from: the directory above bin/, or for a
+# single-file build the directory holding the file. SU_BUNDLED is a build
+# constant, not a setting: build.sh rewrites the next line to SU_BUNDLED=1.
+SU_BUNDLED=0
+SU_BIN=$(su_resolve_self)
+if [ "$SU_BUNDLED" = 1 ]; then
+  SU_ROOT=$(dirname "$SU_BIN")
+else
+  SU_ROOT=$(cd -P "$(dirname "$SU_BIN")/.." && pwd)
+fi
 export SU_ROOT
-SU_BIN="$SU_ROOT/bin/system-update"
 
+# Modules. build.sh replaces everything between the two markers with the
+# modules' contents to make the single-file build.
+# @@BUNDLE-MODULES-BEGIN@@
 # shellcheck source=lib/core/log.sh
 source "$SU_ROOT/lib/core/log.sh"
 # shellcheck source=lib/core/util.sh
@@ -89,15 +101,34 @@ source "$SU_ROOT/lib/pkg/snap.sh"
 # shellcheck source=lib/pkg/fwupd.sh
 source "$SU_ROOT/lib/pkg/fwupd.sh"
 tools_load
+# @@BUNDLE-MODULES-END@@
 
 # version_string: "system-update X.Y.Z (git abcdef1)"
 version_string() {
   local v commit=""
+  if [ "$SU_BUNDLED" = 1 ]; then
+    printf 'system-update %s (git %s, single file)\n' "${SU_BUNDLE_VERSION:-unknown}" "${SU_BUNDLE_COMMIT:-unknown}"
+    return 0
+  fi
   v=$(tr -d '[:space:]' < "$SU_ROOT/VERSION" 2>/dev/null || echo unknown)
   if [ -e "$SU_ROOT/.git" ] && has_cmd git; then
     commit=$(git -C "$SU_ROOT" rev-parse --short HEAD 2>/dev/null || true)
   fi
   printf 'system-update %s%s\n' "$v" "${commit:+ (git $commit)}"
+}
+
+# completion_main SHELL: print the completion script (--completion bash).
+# A single-file build carries it as su_completion_script (added by build.sh).
+completion_main() {
+  case "$1" in
+    bash|zsh) ;;
+    *) echo "system-update: --completion supports bash (zsh can load it with bashcompinit)" >&2; return 2 ;;
+  esac
+  if declare -F su_completion_script >/dev/null; then
+    su_completion_script
+  else
+    cat -- "$SU_ROOT/completions/system-update.bash"
+  fi
 }
 
 # list_main: --list output.
@@ -144,13 +175,20 @@ list_main() {
 # run_user_tools_as_sudo_user: we are root via sudo; run the user-level
 # tools in a child process as SUDO_USER with that user's login environment.
 run_user_tools_as_sudo_user() {
-  local results childlog="" args=() rc=0 color=never
+  local results childlog="" args=() rc=0 color=never rfd cfd=""
+  # Root creates the files the child reports through, hands them to the
+  # user, and reads them back through descriptors opened now, not by path:
+  # by the time root reads, a path in /tmp could have been replaced.
   results=$(tmp_file) || return 1
+  exec {rfd}<"$results"
   chown "$SU_USER" "$results" 2>/dev/null || true
   # The child cannot write to root's log; it logs to a file of its own that
   # is appended to this run's log afterwards.
-  if [ -n "$SU_LOG_FD" ]; then
-    childlog=$(tmp_file) && chown "$SU_USER" "$childlog" 2>/dev/null || childlog=""
+  if [ -n "$SU_LOG_FILE" ] && childlog=$(tmp_file); then
+    exec {cfd}<"$childlog"
+    chown "$SU_USER" "$childlog" 2>/dev/null || true
+  else
+    childlog=""
   fi
   [ "$SU_USE_COLOR" = 1 ] && color=always
   args=(--_user-tools --color "$color" --timeout "$SU_TIMEOUT")
@@ -173,20 +211,27 @@ run_user_tools_as_sudo_user() {
   log_info "running user-level tools as $SU_USER"
   local -a envp=(env -i "HOME=$SU_USER_HOME" "USER=$SU_USER" "LOGNAME=$SU_USER"
     "PATH=/usr/local/bin:/usr/bin:/bin" "TERM=${TERM:-dumb}" "LANG=${LANG:-C.UTF-8}"
-    "SU_RESULTS_OUT=$results" "GITHUB_TOKEN=$(cfg GITHUB_TOKEN)" "NO_COLOR=${NO_COLOR:-}"
-    "SU_GITHUB_API=$SU_GITHUB_API")
+    "SU_RESULTS_OUT=$results" "NO_COLOR=${NO_COLOR:-}" "SU_GITHUB_API=$SU_GITHUB_API")
   [ -n "${LC_ALL:-}" ] && envp+=("LC_ALL=$LC_ALL")
+  # The GitHub token travels on the child's stdin, never on a command line
+  # (ps shows those to every user): the child puts the line it reads into
+  # its environment before the login shell starts, config_load takes it
+  # from there, and main() unsets it again so the tools do not inherit it.
+  # stdin is /dev/null from the login shell on.
   # shellcheck disable=SC2016  # $0/$@ are expanded by the child bash on purpose
+  local child='IFS= read -r GITHUB_TOKEN || GITHUB_TOKEN=""; export GITHUB_TOKEN; exec </dev/null; exec bash -lc '"'"'exec "$0" "$@"'"'"' "$0" "$@"'
   if has_cmd runuser; then
-    runuser -u "$SU_USER" -- "${envp[@]}" bash -lc 'exec "$0" "$@"' "$SU_BIN" "${args[@]}" </dev/null || rc=$?
+    printf '%s\n' "$(cfg GITHUB_TOKEN)" | runuser -u "$SU_USER" -- "${envp[@]}" bash -c "$child" "$SU_BIN" "${args[@]}" || rc=$?
   else
-    sudo -n -u "$SU_USER" -H -- "${envp[@]}" bash -lc 'exec "$0" "$@"' "$SU_BIN" "${args[@]}" </dev/null || rc=$?
+    printf '%s\n' "$(cfg GITHUB_TOKEN)" | sudo -n -u "$SU_USER" -H -- "${envp[@]}" bash -c "$child" "$SU_BIN" "${args[@]}" || rc=$?
   fi
-  runner_import_file "$results"
-  [ -n "$childlog" ] && runlog_append "$childlog"
-  if [ "$rc" -ne 0 ] && [ ! -s "$results" ]; then
+  runner_import_file "/dev/fd/$rfd"
+  [ -n "$childlog" ] && runlog_append "/dev/fd/$cfd"
+  if [ "$rc" -ne 0 ] && [ ! -s "/dev/fd/$rfd" ]; then
     runner_record "user-tools" failed "child process for $SU_USER exited with $rc"
   fi
+  exec {rfd}<&-
+  [ -n "$cfd" ] && exec {cfd}<&-
   return 0
 }
 
@@ -200,9 +245,30 @@ main() {
     exit 2
   fi
   if [ "$SU_ARG_HELP" = 1 ]; then usage; exit 0; fi
+  # Output that other programs read (the completion sources --completion
+  # and splits --_steps) needs no configuration, so it is printed before a
+  # config warning could land on stdout next to it.
+  if [ "$SU_ARG_VERSION" = 1 ]; then version_string; exit 0; fi
+  if [ -n "$SU_ARG_COMPLETION" ]; then completion_main "$SU_ARG_COMPLETION"; exit $?; fi
+  if [ "$SU_ARG_STEPS" = 1 ]; then tools_step_names; exit 0; fi
+
+  # Run from / with absolute paths for the files we were given. The current
+  # directory may be shared (/tmp) or someone else's, and mise, asdf, cargo,
+  # pnpm, bun and npm read configuration from the directory they run in.
+  [ -n "$SU_CONFIG_FILE" ] && [[ "$SU_CONFIG_FILE" != /* ]] && SU_CONFIG_FILE="$PWD/$SU_CONFIG_FILE"
+  [ -n "$SU_LOG_PATH" ] && [[ "$SU_LOG_PATH" != /* ]] && SU_LOG_PATH="$PWD/$SU_LOG_PATH"
+  cd / || exit 1
+
   config_load
   args_apply || exit 2
-  if [ "$SU_ARG_VERSION" = 1 ]; then version_string; exit 0; fi
+  if [ "$SU_ARG_USER_TOOLS" = 1 ]; then
+    # The token arrived through the environment (run_user_tools_as_sudo_user)
+    # and config_load has it now; the tools run below must not inherit it.
+    unset GITHUB_TOKEN GH_TOKEN
+  fi
+  # --quiet hides third-party output (it is still in the run log). Our own
+  # lines go to the console descriptor SU_OUT and are unaffected.
+  [ "$SU_QUIET" = 1 ] && exec >/dev/null 2>&1
   gh_init || exit 1
 
   os_detect

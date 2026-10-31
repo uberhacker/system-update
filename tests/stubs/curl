@@ -11,7 +11,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -o) out="$2"; shift ;;
     -D) hdr="$2"; shift ;;
-    -H|--connect-timeout|--max-time|--retry) shift ;;
+    -H|--connect-timeout|--max-time|--retry|--proto|--proto-redir) shift ;;
+    -K) [ "$2" = - ] && cat >/dev/null; shift ;;
     -*) ;;
     *) url="$1" ;;
   esac

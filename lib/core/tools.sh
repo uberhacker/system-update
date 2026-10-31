@@ -22,9 +22,34 @@ TOOL_METHOD="unknown"
 TOOL_REAL=""
 TOOL_PROBE_OUT=""
 
-# tools_load: source every tool module.
+# tools_names: every tool module's name, from lib/tools or, in a single-file
+# build, from the list build.sh recorded (SU_BUNDLED_TOOLS).
+tools_names() {
+  local f
+  if [ "${SU_BUNDLED:-0}" = 1 ]; then
+    printf '%s\n' "${SU_BUNDLED_TOOLS[@]}"
+    return 0
+  fi
+  for f in "$SU_ROOT"/lib/tools/*.sh; do
+    [ -r "$f" ] || continue
+    f="${f##*/}"
+    printf '%s\n' "${f%.sh}"
+  done
+}
+
+# tools_step_names: every name --only/--skip accepts (`--_steps`, used by
+# the completion): the groups and aliases step_enabled knows, the package
+# manager steps, the extras, and every tool module.
+tools_step_names() {
+  printf '%s\n' system pkg apt dnf zypper pacman apk xbps emerge nix rpm-ostree \
+    extras flatpak snap firmware reboot-check tools
+  tools_names
+}
+
+# tools_load: source every tool module (a single-file build has them inline).
 tools_load() {
   local f
+  [ "${SU_BUNDLED:-0}" = 1 ] && return 0
   for f in "$SU_ROOT"/lib/tools/*.sh; do
     [ -r "$f" ] || continue
     # shellcheck disable=SC1090
@@ -40,12 +65,10 @@ tool_fn() {
 
 # tools_discover: run every detect function; fills SU_TOOLS / SU_TOOL_BIN.
 tools_discover() {
-  local f name fn out
+  local name fn out
   SU_TOOLS=()
   SU_TOOL_BIN=()
-  for f in "$SU_ROOT"/lib/tools/*.sh; do
-    [ -r "$f" ] || continue
-    name=$(basename "$f" .sh)
+  for name in $(tools_names); do
     fn=$(tool_fn "$name" detect)
     declare -F "$fn" >/dev/null || continue
     if out=$("$fn" 2>/dev/null); then
@@ -112,9 +135,9 @@ tool_probe() {
   # Read, remove, then print: a caller that stops reading early (| head -n1)
   # kills this subshell with SIGPIPE, which must not leave the file behind.
   text=$(head -c 4096 "$out")
-  if [ -n "${SU_LOG_FD:-}" ]; then
+  if [ -n "${SU_LOG_FILE:-}" ]; then
     _log_file "  probe: $bin $* (exit $rc)"
-    head -c 1024 "$out" | head -n 10 >&"$SU_LOG_FD"
+    head -c 1024 "$out" | head -n 10 >> "$SU_LOG_FILE"
   fi
   rm -f -- "$out"
   printf '%s\n' "$text"
