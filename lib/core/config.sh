@@ -8,7 +8,7 @@
 # never sourced or eval'd, so a hostile value cannot run code. Unknown keys
 # and malformed values are reported and ignored.
 
-SU_DEFAULT_REPO="https://github.com/bradvrudney/system-update"
+SU_DEFAULT_REPO="https://github.com/uberhacker/system-update"
 
 # Allowed keys with their default values and a validation class.
 #   str      any printable text without control characters

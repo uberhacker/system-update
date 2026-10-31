@@ -79,8 +79,26 @@ setup() {
   assert_equal 2.0.0 "$(cat "$T/install/VERSION")"
 }
 
-@test "the default source is the bradvrudney fork over https" {
-  assert_equal "https://github.com/bradvrudney/system-update" "$SU_DEFAULT_REPO"
+@test "the default source is Ed Reel's repository over https" {
+  assert_equal "https://github.com/uberhacker/system-update" "$SU_DEFAULT_REPO"
+}
+
+@test "a checkout with no configured source follows its own origin" {
+  run "$INSTALL" --self-update
+  assert_equal 0 "$status"
+  assert_contains "$output" "9.9.9"
+  assert_equal 9.9.9 "$(cat "$T/install/VERSION")"
+}
+
+@test "an origin over an insecure transport is not followed" {
+  local url
+  for url in git://example.invalid/x.git http://example.invalid/x.git; do
+    git -C "$T/install" remote set-url origin "$url"
+    run "$INSTALL" --self-update
+    assert_equal 1 "$status"
+    assert_contains "$output" "insecure transport"
+    assert_equal 2.0.0 "$(cat "$T/install/VERSION")"
+  done
 }
 
 @test "origin mismatch is refused unless --source re-points it" {

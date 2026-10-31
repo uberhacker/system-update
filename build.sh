@@ -60,7 +60,7 @@ trap 'rm -f -- "$tmp"' EXIT
       cat <<EOF
 #
 # Single-file build of system-update $version (git $commit), made by
-# build.sh from https://github.com/bradvrudney/system-update. Do not edit:
+# build.sh from https://github.com/uberhacker/system-update. Do not edit:
 # change the modules in lib/ and rebuild.
 SU_BUNDLE_VERSION='$version'
 SU_BUNDLE_COMMIT='$commit'

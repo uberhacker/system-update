@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # lib/core/selfupdate.sh - update this program from its own source.
 #
-# Git checkout:  verify origin matches SELF_UPDATE_REPO (re-point only with
-#                --source), refuse a dirty tree, fetch, fast-forward only.
+# Git checkout:  follow the remote the checkout was cloned from (origin);
+#                when SELF_UPDATE_REPO or --source is set, origin must match
+#                it (--source re-points it). Refuse a dirty tree, fetch,
+#                fast-forward only.
 # Plain install: download the branch tarball over https, sanity-check it
 #                (entry point present, bash -n passes) and swap the directory
 #                in with two renames. Never `reset --hard`, never chown system
@@ -25,6 +27,20 @@ selfupdate_norm_url() {
   u="${u#file://}"
   u="${u,,}"
   printf '%s\n' "$u"
+}
+
+# selfupdate_origin_ok URL: may a checkout's own origin be followed? Any
+# authenticated transport: https, ssh (ssh:// or scp-like host:path); never
+# http:// or git:// (file:// only with the test hook).
+selfupdate_origin_ok() {
+  case "$1" in
+    https://*|ssh://*|git+ssh://*) return 0 ;;
+    file:///*) [ "${SYSTEM_UPDATE_ALLOW_FILE_SOURCE:-0}" = 1 ] && return 0 ;;
+    *://*) ;;
+    *:*) [[ "$1" != /* ]] && return 0 ;;
+  esac
+  log_error "refusing to follow origin over an insecure transport: $1 (set SELF_UPDATE_REPO or pass --source)"
+  return 1
 }
 
 # selfupdate_source_ok URL: https only (file:// for tests).
@@ -295,6 +311,15 @@ selfupdate_main() {
     selfupdate_bundle "$SU_BIN" "$repo"
   elif [ -e "$root/.git" ]; then
     has_cmd git || { log_error "git is required to update a git checkout"; return 1; }
+    if [ "${SU_CFG_SOURCE[SELF_UPDATE_REPO]:-default}" = default ]; then
+      # Nothing configured: a checkout follows the remote it was cloned from.
+      local origin
+      if origin=$(git -C "$root" remote get-url origin 2>/dev/null) && [ -n "$origin" ]; then
+        selfupdate_origin_ok "$origin" || return 1
+        repo="$origin"
+        log_detail "no SELF_UPDATE_REPO configured; following the checkout's origin"
+      fi
+    fi
     selfupdate_git "$root" "$repo" "$branch"
   else
     selfupdate_tarball "$root" "$repo" "$branch"

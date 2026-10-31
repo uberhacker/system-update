@@ -13,7 +13,7 @@ setup() {
 
 @test "defaults" {
   config_load
-  assert_equal "https://github.com/bradvrudney/system-update" "$(cfg SELF_UPDATE_REPO)"
+  assert_equal "https://github.com/uberhacker/system-update" "$(cfg SELF_UPDATE_REPO)"
   assert_equal "" "$(cfg SELF_UPDATE_BRANCH)"
   assert_equal 300 "$(cfg TIMEOUT)"
   assert_equal 0 "$(cfg FIRMWARE)"
@@ -97,7 +97,7 @@ EOF
   config_load >/dev/null
   assert_equal 300 "$(cfg TIMEOUT)"
   assert_equal "" "$(cfg SKIP)"
-  assert_equal "https://github.com/bradvrudney/system-update" "$(cfg SELF_UPDATE_REPO)"
+  assert_equal "https://github.com/uberhacker/system-update" "$(cfg SELF_UPDATE_REPO)"
   assert_equal "" "$(cfg SELF_UPDATE_BRANCH)"
   assert_equal auto "$(cfg COLOR)"
 }

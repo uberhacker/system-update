@@ -7,8 +7,10 @@
 # warning. Environment variables with the same names override the files;
 # command line flags override everything.
 
-# Where --self-update pulls this program from. https:// only.
-#SELF_UPDATE_REPO=https://github.com/bradvrudney/system-update
+# Where --self-update pulls this program from (https:// only). Unset, a git
+# checkout follows the remote it was cloned from and a plain or single-file
+# installation uses the repository below; set it to follow a fork.
+#SELF_UPDATE_REPO=https://github.com/uberhacker/system-update
 
 # Branch for --self-update. Empty (default) follows the checkout's current
 # branch if the remote has it, otherwise the remote's default branch

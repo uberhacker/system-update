@@ -78,7 +78,7 @@ update recipes are his; see [Changes from the original](#changes-from-the-origin
 ## Quick start
 
 ```
-$ git clone https://github.com/bradvrudney/system-update.git
+$ git clone https://github.com/uberhacker/system-update.git
 $ cd system-update
 $ ./system-update --list         # what was detected; nothing runs
 $ ./system-update --detailed     # every package and tool that would change, old -> new
@@ -362,7 +362,7 @@ System wide (puts `system-update` in `/usr/local/bin`, the program in
 `/usr/local/share/system-update`):
 
 ```
-$ git clone https://github.com/bradvrudney/system-update.git
+$ git clone https://github.com/uberhacker/system-update.git
 $ cd system-update
 $ sudo ./install.sh
 ```
@@ -394,8 +394,8 @@ check that `--help`, `--list` and the dry-run plan are identical.
 From a release (each `v*` tag publishes `system-update` and its `.sha256`):
 
 ```
-$ curl -fLO https://github.com/bradvrudney/system-update/releases/latest/download/system-update
-$ curl -fLO https://github.com/bradvrudney/system-update/releases/latest/download/system-update.sha256
+$ curl -fLO https://github.com/uberhacker/system-update/releases/latest/download/system-update
+$ curl -fLO https://github.com/uberhacker/system-update/releases/latest/download/system-update.sha256
 $ sha256sum -c system-update.sha256
 $ sudo install -m 0755 system-update /usr/local/bin/system-update
 ```
@@ -558,7 +558,7 @@ ignored. See [`config.example`](config.example).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `SELF_UPDATE_REPO` | `https://github.com/bradvrudney/system-update` | git source for `--self-update` (https only) |
+| `SELF_UPDATE_REPO` | `https://github.com/uberhacker/system-update` | source for `--self-update` (https only); unset, a git checkout follows its own origin |
 | `SELF_UPDATE_BRANCH` | empty | branch for `--self-update`; empty follows the checkout's branch if the remote has it, else the remote's default branch (`master` here) |
 | `SKIP` / `ONLY` | empty | comma separated step names |
 | `TIMEOUT` | `300` | seconds a third-party tool may run |
@@ -639,10 +639,12 @@ never a reason to stop.
 
 `system-update --self-update` updates the program itself and exits:
 
-* In a git checkout: `git fetch` and `git pull --ff-only` on the configured
-  branch. It refuses to touch a checkout with local changes, a different
-  `origin` (unless `--source` says so), or a branch the remote does not have,
-  and never runs `git reset --hard`.
+* In a git checkout: `git fetch` and `git pull --ff-only` from the remote
+  the checkout was cloned from (`origin`), on the configured branch. When
+  `SELF_UPDATE_REPO` or `--source` names a repository, `origin` must be that
+  repository; `--source` re-points it, a config value that differs is
+  refused. It also refuses a checkout with local changes or a branch the
+  remote does not have, and never runs `git reset --hard`.
 * Installed without `.git`: downloads the branch tarball from the
   `SELF_UPDATE_REPO` over https, checks that it looks like this program
   (`bin/system-update` present, every file passes `bash -n`), and swaps the
@@ -657,11 +659,15 @@ never a reason to stop.
 
 `--self-update --dry-run` fetches and checks but does not change anything.
 
-To follow Ed Reel's original repository instead:
+To follow a fork instead, for every install method:
 
 ```
-$ system-update --self-update --source https://github.com/uberhacker/system-update
+$ system-update --self-update --source https://github.com/<fork>/system-update
 ```
+
+or put `SELF_UPDATE_REPO=https://github.com/<fork>/system-update` in the
+config file. The single-file build and a plain (non-git) installation have
+no `origin` and always use `SELF_UPDATE_REPO`.
 
 ## Running it unattended
 
