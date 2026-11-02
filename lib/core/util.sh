@@ -6,6 +6,7 @@
 : "${SU_DETAILED:=0}"         # --detailed: dry run that lists versions
 : "${SU_TIMEOUT:=300}"        # seconds for each third-party command
 : "${SU_PROBE_TIMEOUT:=20}"   # seconds for a "--version" style probe
+: "${SU_TOOL_TIMEOUT:=120}"   # seconds for a tool's own self-update command
 : "${SU_PKG_TIMEOUT:=3600}"   # seconds for a package manager run
 
 SU_TMP_PATHS=()

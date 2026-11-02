@@ -26,6 +26,10 @@
 # Seconds a third-party tool may take before it is killed (default 300).
 #TIMEOUT=300
 
+# Seconds a tool's own self-update command (claude update, devin update,
+# ...) may take (default 120). These finish in seconds or not at all.
+#TOOL_TIMEOUT=120
+
 # Seconds a "--version" probe may take (default 20). antirez's kilo editor,
 # for example, never returns when called with -v; this keeps us moving.
 #PROBE_TIMEOUT=20

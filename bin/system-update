@@ -278,6 +278,11 @@ main() {
     exit 0
   fi
 
+  if [ "$SU_ARG_UNDO_FLATPAK" = 1 ]; then
+    flatpak_undo_main || exit 1
+    exit 0
+  fi
+
   if [ "$SU_ARG_USER_TOOLS" = 1 ]; then
     # Child process: only the invoking user's tools, results go to SU_RESULTS_OUT.
     runlog_open

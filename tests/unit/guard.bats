@@ -67,17 +67,30 @@ setup() {
   [ ! -e "$BATS_TEST_TMPDIR/upgraded" ]
 }
 
-@test "the upgrade runs with stdin from /dev/null and a timeout" {
+@test "the upgrade runs with stdin from /dev/null and TOOL_TIMEOUT" {
   make_fake_bin "$bindir" kilo 'case "$1" in --version) echo 4.2.1;; upgrade) read -r line && echo "got input" >&2; sleep 30;; esac'
   tools_discover
-  SU_TIMEOUT=2
+  SU_TOOL_TIMEOUT=2
   local start end
   start=$(date +%s)
   tool_kilo_update
   end=$(date +%s)
   assert_equal failed "$STEP_RESULT"
-  assert_contains "$STEP_NOTE" "timed out"
+  assert_contains "$STEP_NOTE" "timed out after 2s"
   [ $((end - start)) -lt 20 ]
+}
+
+@test "an npm update keeps the longer TIMEOUT, not TOOL_TIMEOUT" {
+  local prefix="$BATS_TEST_TMPDIR/prefix"
+  mkdir -p "$prefix/lib/node_modules/@kilocode/cli/bin"
+  printf '#!/usr/bin/env bash\necho 4.2.1\n' > "$prefix/lib/node_modules/@kilocode/cli/bin/kilo"
+  chmod +x "$prefix/lib/node_modules/@kilocode/cli/bin/kilo"
+  ln -s "$prefix/lib/node_modules/@kilocode/cli/bin/kilo" "$bindir/kilo"
+  make_fake_bin "$bindir" npm 'sleep 3'
+  tools_discover
+  SU_TOOL_TIMEOUT=1
+  tool_kilo_update
+  assert_equal ok "$STEP_RESULT"
 }
 
 @test "npm-installed Kilo Code is updated through npm without probing" {

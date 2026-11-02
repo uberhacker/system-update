@@ -279,7 +279,7 @@ with a fallback on the managers that are actually present. Step name:
 
 | Step | What it does | Details |
 | --- | --- | --- |
-| `flatpak` | `flatpak update` for the system installation (as root) and the invoking user's own | [docs/flatpak.md](docs/flatpak.md) |
+| `flatpak` | `flatpak update` for the system installation (as root) and the invoking user's own; records what changed so `--undo-flatpak` can roll it back | [docs/flatpak.md](docs/flatpak.md) |
 | `snap` | `snap refresh` when snapd is running | [docs/snap.md](docs/snap.md) |
 | `firmware` | `fwupdmgr refresh` and `get-updates`; applies them only with `--firmware` | [docs/firmware.md](docs/firmware.md) |
 | `reboot-check` | `needs-restarting`, `/var/run/reboot-required`, `zypper needs-rebooting`, a staged ostree deployment, or a running kernel that is no longer installed; reports, never reboots | [docs/reboot-check.md](docs/reboot-check.md) |
@@ -316,8 +316,6 @@ first column (also the group name `tools` for all of them).
 | [`rvm`](docs/rvm.md) | RVM | `rvm get stable` | user | Rubies and gems are not changed |
 | [`vim`](docs/vim.md) | Vim plugins | `git submodule update --init --remote --recursive` in `~/.vim` | user | leaves `~/.vim` with uncommitted submodule changes |
 
-A tool owned by a distro package (for example a `pi` or `copilot` from
-`apt`/`dnf`) is skipped: the system package step already updates it.
 | [`rustup`](docs/rustup.md) | Rust toolchains | `rustup self update` (not for distro/Homebrew rustup), `rustup update --no-self-update` | user | |
 | [`cargo`](docs/cargo.md) | crates installed with `cargo install` | `cargo install-update -a` when the `cargo-update` crate is installed | user | tools under `~/.cargo/bin` are routed here |
 | [`brew`](docs/brew.md) | Homebrew on Linux | `brew update`, `brew upgrade`, `brew autoremove` | user, never root | |
@@ -333,6 +331,9 @@ A tool owned by a distro package (for example a `pi` or `copilot` from
 | [`npm-globals`](docs/npm-globals.md) | global npm packages | `npm update -g` under the user's own Node | user | **opt-in**: `--npm-globals`; never a system prefix |
 | [`go`](docs/go.md) | Go in `/usr/local/go` | latest stable from go.dev, sha256-verified, swapped in atomically | root, unless you can write `/usr/local` | **opt-in**: `--go-toolchain` |
 | [`containers`](docs/containers.md) | distrobox, toolbox, podman, docker | `distrobox upgrade --all`, package manager inside each toolbox, `podman auto-update`, image re-pulls | user | **opt-in**: `--containers`; containers are never recreated or restarted |
+
+A tool owned by a distro package (for example a `pi` or `copilot` from
+`apt`/`dnf`) is skipped: the system package step already updates it.
 
 ### Identification guard
 
@@ -476,6 +477,9 @@ Options:
       --npm-globals       npm update -g under the user's own Node (nvm); never a system prefix
       --go-toolchain      replace /usr/local/go with the latest stable Go (sha256-verified)
       --containers        distrobox/toolbox upgrades, podman auto-update, re-pull container images
+      --undo-flatpak      put the Flatpak apps and runtimes the last run changed
+                          back on their previous commit and hold them there
+                          (flatpak mask); with --dry-run, show the commands
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
@@ -562,6 +566,7 @@ ignored. See [`config.example`](config.example).
 | `SELF_UPDATE_BRANCH` | empty | branch for `--self-update`; empty follows the checkout's branch if the remote has it, else the remote's default branch (`master` here) |
 | `SKIP` / `ONLY` | empty | comma separated step names |
 | `TIMEOUT` | `300` | seconds a third-party tool may run |
+| `TOOL_TIMEOUT` | `120` | seconds a tool's own self-update command (`claude update`, `devin update`, ...) may run |
 | `PROBE_TIMEOUT` | `20` | seconds a `--version` probe (and the npm and git lookups of `--detailed`) may take |
 | `GITHUB_TOKEN` | empty | raises the GitHub API rate limit (`GH_TOKEN` is accepted too) |
 | `COLOR` | `auto` | `auto`, `always`, `never` |
@@ -736,6 +741,7 @@ runs; `--dry-run` from a timer is a safe way to get a daily report instead.
 | `GitHub API rate limit reached` | Unauthenticated GitHub lookups are limited to 60 an hour; the rest of the run skips them. | Set `GITHUB_TOKEN` (any token, no scopes needed) in the config file or environment. |
 | `sudo credentials unavailable` / system step skipped | `sudo` asked for a password and none was given, or the run is not interactive. | Run it from a terminal, or add a `NOPASSWD` rule for unattended runs. |
 | `timed out after 300s` | A third-party command ran longer than `TIMEOUT`. | `--timeout 900`, or `TIMEOUT=900` in the config. Package managers have their own one-hour limit. |
+| `update command failed (timed out after 120s)` | A tool's own updater ran longer than `TOOL_TIMEOUT`. | `TOOL_TIMEOUT=300` in the config. |
 | `⚠ warn apt: ... package source(s) could not be refreshed` | A repository was unreachable; apt used the old lists for it. | Check the source in `/etc/apt/sources.list.d`; the rest of the upgrade went ahead. |
 | `⚠ warn reboot-check: reboot required` | A new kernel, a staged ostree deployment or a package asked for a reboot. | Reboot when convenient. |
 | A tool you use is not in the summary | It was not found on your `PATH`, or it is not supported. | `--list` shows every tool that was detected and where. |
@@ -786,7 +792,8 @@ and Alpine. The GitHub Actions workflow
 in `.github/workflows/ci.yml` runs all three.
 
 Adding a tool is one file in `lib/tools/` and one page in `docs/` (tab
-completion picks the new step name up by itself):
+completion picks the new step name up by itself). [CONTRIBUTING.md](CONTRIBUTING.md)
+walks through it, with the rules every module follows and how to test it:
 
 ```bash
 #!/usr/bin/env bash
