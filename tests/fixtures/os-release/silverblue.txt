@@ -1,0 +1,8 @@
+NAME="Fedora Linux"
+VERSION="41 (Silverblue)"
+ID=fedora
+VERSION_ID=41
+PRETTY_NAME="Fedora Linux 41 (Silverblue)"
+VARIANT="Silverblue"
+VARIANT_ID=silverblue
+OSTREE_VERSION='41.20241110.0'

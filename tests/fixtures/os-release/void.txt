@@ -1,0 +1,4 @@
+NAME="Void"
+ID="void"
+DISTRIB_ID="void"
+PRETTY_NAME="Void Linux"

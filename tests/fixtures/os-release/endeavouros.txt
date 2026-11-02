@@ -1,0 +1,5 @@
+NAME="EndeavourOS"
+PRETTY_NAME="EndeavourOS"
+ID="endeavouros"
+ID_LIKE="arch"
+BUILD_ID="2024.06.25"

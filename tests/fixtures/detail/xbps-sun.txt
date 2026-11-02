@@ -1,0 +1,2 @@
+bash-5.2.37_1 update x86_64 https://repo-default.voidlinux.org/current 9MB 1MB
+newpkg-1.0_1 install x86_64 https://repo-default.voidlinux.org/current 1MB 1MB

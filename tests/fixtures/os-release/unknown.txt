@@ -1,0 +1,3 @@
+NAME="Mystery OS"
+ID=mysteryos
+PRETTY_NAME="Mystery OS 1.0"

@@ -1,0 +1,5 @@
+NAME=NixOS
+ID=nixos
+VERSION="24.05 (Uakari)"
+VERSION_ID="24.05"
+PRETTY_NAME="NixOS 24.05 (Uakari)"

@@ -1,0 +1,18 @@
+{
+  "url": "https://api.github.com/repos/docker/compose/releases/191234",
+  "html_url": "https://github.com/docker/compose/releases/tag/v2.29.1",
+  "id": 191234,
+  "author": {"login": "glours", "id": 1},
+  "node_id": "RE_x",
+  "tag_name": "v2.29.1",
+  "target_commitish": "main",
+  "name": "v2.29.1",
+  "draft": false,
+  "prerelease": false,
+  "assets": [
+    {"name": "checksums.txt", "browser_download_url": "https://github.com/docker/compose/releases/download/v2.29.1/checksums.txt"},
+    {"name": "docker-compose-linux-x86_64", "browser_download_url": "https://github.com/docker/compose/releases/download/v2.29.1/docker-compose-linux-x86_64"},
+    {"name": "docker-compose-linux-aarch64", "browser_download_url": "https://github.com/docker/compose/releases/download/v2.29.1/docker-compose-linux-aarch64"}
+  ],
+  "body": "Release notes with \"quotes\" and a fake \"tag_name\": \"v9.9.9\" inside the text"
+}
