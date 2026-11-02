@@ -279,7 +279,7 @@ with a fallback on the managers that are actually present. Step name:
 
 | Step | What it does | Details |
 | --- | --- | --- |
-| `flatpak` | `flatpak update` for the system installation (as root) and the invoking user's own | [docs/flatpak.md](docs/flatpak.md) |
+| `flatpak` | `flatpak update` for the system installation (as root) and the invoking user's own; records what changed so `--undo-flatpak` can roll it back | [docs/flatpak.md](docs/flatpak.md) |
 | `snap` | `snap refresh` when snapd is running | [docs/snap.md](docs/snap.md) |
 | `firmware` | `fwupdmgr refresh` and `get-updates`; applies them only with `--firmware` | [docs/firmware.md](docs/firmware.md) |
 | `reboot-check` | `needs-restarting`, `/var/run/reboot-required`, `zypper needs-rebooting`, a staged ostree deployment, or a running kernel that is no longer installed; reports, never reboots | [docs/reboot-check.md](docs/reboot-check.md) |
@@ -476,6 +476,9 @@ Options:
       --npm-globals       npm update -g under the user's own Node (nvm); never a system prefix
       --go-toolchain      replace /usr/local/go with the latest stable Go (sha256-verified)
       --containers        distrobox/toolbox upgrades, podman auto-update, re-pull container images
+      --undo-flatpak      put the Flatpak apps and runtimes the last run changed
+                          back on their previous commit and hold them there
+                          (flatpak mask); with --dry-run, show the commands
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
