@@ -15,6 +15,7 @@ SU_ARG_QUIET=""
 SU_ARG_COLOR=""
 SU_ARG_FIRMWARE=""
 SU_ARG_SELF_UPDATE=0
+SU_ARG_UNDO_FLATPAK=0
 SU_ARG_SOURCE=""
 SU_ARG_BRANCH=""
 SU_ARG_VERSION=0
@@ -73,6 +74,9 @@ Options:
       --npm-globals       npm update -g under the user's own Node (nvm); never a system prefix
       --go-toolchain      replace /usr/local/go with the latest stable Go (sha256-verified)
       --containers        distrobox/toolbox upgrades, podman auto-update, re-pull container images
+      --undo-flatpak      put the Flatpak apps and runtimes the last run changed
+                          back on their previous commit and hold them there
+                          (flatpak mask); with --dry-run, show the commands
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
@@ -136,6 +140,7 @@ args_parse() {
       --containers) SU_ARG_CONTAINERS=1 ;;
       --log) args_need "$opt" "${2:-}" || return 2; SU_LOG_PATH="$2"; SU_ARG_LOGGING=1; shift ;;
       --no-log) SU_ARG_LOGGING=0; SU_LOG_PATH="" ;;
+      --undo-flatpak) SU_ARG_UNDO_FLATPAK=1 ;;
       --self-update) SU_ARG_SELF_UPDATE=1 ;;
       --source) args_need "$opt" "${2:-}" || return 2; SU_ARG_SOURCE="$2"; shift ;;
       --branch) args_need "$opt" "${2:-}" || return 2; SU_ARG_BRANCH="$2"; shift ;;
