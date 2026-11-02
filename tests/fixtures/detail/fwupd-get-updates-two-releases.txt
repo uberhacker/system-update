@@ -1,0 +1,23 @@
+Devices with no available firmware updates: 
+ • KEK CA
+Example Vendor System Product Name
+│
+└─System Firmware:
+  │   Device ID:          a45df35ac0e948ee180fe216a5f703f32dda163f
+  │   Current version:    01.10.00
+  │   Vendor:             HP (DMI:Insyde)
+  │   Device Flags:       • Internal device
+  │                       • Updatable
+  │                       • Needs a reboot after installation
+  │ 
+  ├─HP System Firmware Update:
+  │     New version:      01.14.00
+  │     Remote ID:        lvfs
+  │ 
+  ├─HP System Firmware Update:
+  │     New version:      01.12.00
+  │     Remote ID:        lvfs
+  │ 
+  └─HP System Firmware Update:
+        New version:      01.11.00
+        Remote ID:        lvfs

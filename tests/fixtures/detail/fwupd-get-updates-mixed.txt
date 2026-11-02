@@ -1,0 +1,60 @@
+Devices with no available firmware updates: 
+ • HP UEFI Secure Boot DB
+ • HP UEFI Secure Boot KEK
+ • KEK CA
+ • UEFI CA
+ • Windows UEFI CA
+ • System Firmware
+Devices with the latest available firmware version:
+ • UEFI Device Firmware
+HP EliteBook 840 G8 Notebook PC
+│
+├─UEFI dbx:
+│ │   Device ID:          362301da643102b9f38477387e2193e57abaa590
+│ │   Summary:            UEFI revocation database
+│ │   Current version:    20230501
+│ │   Minimum Version:    20230501
+│ │   Vendor:             UEFI:Linux Foundation
+│ │   Install Duration:   1 second
+│ │   Update State:       Failed
+│ │   Update Error:       failed to write data to efivarfs: Error writing to file descriptor: Invalid argument
+│ │   GUIDs:              c6682ade-b5ec-57c4-b687-676351208742
+│ │   Device Flags:       • Internal device
+│ │                       • Updatable
+│ │                       • Needs a reboot after installation
+│ │ 
+│ ├─Secure Boot dbx Configuration Update:
+│ │     New version:      20250507
+│ │     Remote ID:        lvfs
+│ │     Release ID:       160011
+│ │     Summary:          UEFI Secure Boot Forbidden Signature Database
+│ │ 
+│ └─Secure Boot dbx Configuration Update:
+│       New version:      20241101
+│       Remote ID:        lvfs
+│       Release ID:       131212
+│ 
+├─Thunderbolt Controller:
+│ │   Device ID:          a2c1b8f7a3b5ab2c0a1f4b9fbd8b3e5f5e9e1c11
+│ │   Current version:    21.00
+│ │   Vendor:             HP (TBT:0x03F0)
+│ │   Problems:           • Device requires AC power to be connected
+│ │                       • Device cannot be updated while the lid is closed
+│ │   Device Flags:       • Internal device
+│ │                       • Updatable
+│ │ 
+│ └─HP Thunderbolt Firmware:
+│       New version:      23.00
+│       Remote ID:        lvfs
+│ 
+└─SSD 512GB:
+  │   Device ID:          0f3e1d2c4b5a69788796a5b4c3d2e1f00f1e2d3c
+  │   Current version:    5B2QGXA7
+  │   Update State:       Pending
+  │   Problems:           • Device is waiting for the update to be applied
+  │   Device Flags:       • Internal device
+  │                       • Updatable
+  │ 
+  └─SSD Firmware Update:
+        New version:      5B2QGXB7
+        Remote ID:        lvfs

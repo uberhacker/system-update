@@ -23,6 +23,7 @@ setup() {
   git init --quiet --bare --initial-branch=master "$REMOTE"
   mkdir -p "$T/work"
   cp -a "$REPO_ROOT/bin" "$REPO_ROOT/lib" "$REPO_ROOT/VERSION" "$T/work/"
+  echo 2.0.0 > "$T/work/VERSION"   # fixed, whatever the repository is at
   git -C "$T/work" init --quiet --initial-branch=master
   git -C "$T/work" add -A
   git -C "$T/work" commit --quiet -m "v2.0.0"
