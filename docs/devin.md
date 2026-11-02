@@ -8,8 +8,8 @@ The Devin CLI, updated with its own `devin update` command.
 | Runs as | the invoking user (`SUDO_USER` under `sudo`) |
 | Detected when | `devin` is on the user's `PATH` |
 | Expected package | none (probe only) |
-| Update command | `devin update` |
-| Settings | `TIMEOUT`, `PROBE_TIMEOUT` |
+| Update command | `devin update`, only when the release manifest has a newer version |
+| Settings | `TIMEOUT`, `TOOL_TIMEOUT`, `PROBE_TIMEOUT` |
 
 ## What it does
 
@@ -29,9 +29,10 @@ The Devin CLI, updated with its own `devin update` command.
    | pipx | `pipx upgrade <package>` |
    | anything else | `devin update` |
 
+   Before `devin update`, the installed version is compared with the public release manifest the official installer uses (`https://static.devin.ai/cli/current/manifest.json`). When they match, the step reports `up to date` and `devin update` is not run at all: without a terminal it can sit until the timeout even when there is nothing to do. When the manifest can't be read, `devin update` runs as before.
 4. **Compare.** The probe runs again; the summary shows `old -> new`, or `up to date (X)`.
 
-Every command runs with stdin closed and is killed after `TIMEOUT` seconds (300 by default).
+Every command runs with stdin closed. The tool's own updater is killed after `TOOL_TIMEOUT` seconds (120 by default); a package manager update after `TIMEOUT` seconds (300 by default).
 
 ## What will be affected
 
@@ -43,7 +44,7 @@ Every command runs with stdin closed and is killed after `TIMEOUT` seconds (300 
 
 `--dry-run` identifies and probes the binary, then reports `would update via npm (@pkg)` or `would run 'devin update'` with the installed version. Nothing is installed.
 
-`--detailed` looks up the latest version on npm or PyPI when the tool was installed with one of those package managers. With its own installer the latest version is not published anywhere this script can ask, so only the installed version is shown.
+`--dry-run` and `--detailed` also read the release manifest, so they report `up to date (X)` or `would run 'devin update' (OLD -> NEW)`. For an npm or PyPI install, `--detailed` asks that registry instead.
 
 ## Warnings
 

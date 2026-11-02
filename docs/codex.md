@@ -9,7 +9,7 @@ OpenAI's coding agent CLI, normally the npm package `@openai/codex`.
 | Detected when | `codex` is on the user's `PATH` |
 | Expected package | `@openai/codex` |
 | Update command | `codex update` |
-| Settings | `TIMEOUT`, `PROBE_TIMEOUT` |
+| Settings | `TIMEOUT`, `TOOL_TIMEOUT`, `PROBE_TIMEOUT` |
 
 ## What it does
 
@@ -31,7 +31,7 @@ OpenAI's coding agent CLI, normally the npm package `@openai/codex`.
 
 4. **Compare.** The probe runs again; the summary shows `old -> new`, or `up to date (X)`.
 
-Every command runs with stdin closed and is killed after `TIMEOUT` seconds (300 by default).
+Every command runs with stdin closed. The tool's own updater is killed after `TOOL_TIMEOUT` seconds (120 by default); a package manager update after `TIMEOUT` seconds (300 by default).
 
 ## What will be affected
 

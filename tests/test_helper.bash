@@ -31,6 +31,7 @@ load_su() {
   config_load
   SU_TIMEOUT=$(cfg TIMEOUT)
   SU_PROBE_TIMEOUT=$(cfg PROBE_TIMEOUT)
+  SU_TOOL_TIMEOUT=$(cfg TOOL_TIMEOUT)
   log_init
 }
 
