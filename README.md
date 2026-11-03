@@ -282,7 +282,7 @@ with a fallback on the managers that are actually present. Step name:
 | `flatpak` | `flatpak update` for the system installation (as root) and the invoking user's own; records what changed so `--undo-flatpak` can roll it back | [docs/flatpak.md](docs/flatpak.md) |
 | `snap` | `snap refresh` when snapd is running | [docs/snap.md](docs/snap.md) |
 | `firmware` | `fwupdmgr refresh` and `get-updates`; applies them only with `--firmware` | [docs/firmware.md](docs/firmware.md) |
-| `reboot-check` | `needs-restarting`, `/var/run/reboot-required`, `zypper needs-rebooting`, a staged ostree deployment, or a running kernel that is no longer installed; reports, never reboots | [docs/reboot-check.md](docs/reboot-check.md) |
+| `reboot-check` | `needs-restarting`, `/var/run/reboot-required`, `zypper needs-rebooting`, a staged ostree deployment, a running kernel that is no longer installed, or firmware waiting for the next boot; reports, never reboots | [docs/reboot-check.md](docs/reboot-check.md) |
 
 ## Third-party tools
 

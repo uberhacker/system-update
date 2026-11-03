@@ -32,6 +32,57 @@ apt_changes() {
   done < "$1"
 }
 
+# apt_failed_packages LOGFILE: packages dpkg could not unpack or configure,
+# one per line, from lines such as
+#   dpkg: error processing package pcp (--configure):
+#   dpkg: error processing archive /var/cache/apt/archives/foo_1.2_amd64.deb (--unpack):
+apt_failed_packages() {
+  local line name
+  local -A seen=()
+  local re='^dpkg: error processing (package|archive) ([^ ]+) \(--(configure|unpack|install)\)'
+  while IFS= read -r line; do
+    [[ "$line" =~ $re ]] || continue
+    name="${BASH_REMATCH[2]##*/}"
+    name="${name%%_*}"
+    if [ -z "$name" ] || [ -n "${seen[$name]:-}" ]; then continue; fi
+    seen[$name]=1
+    printf '%s\n' "$name"
+  done < "$1"
+}
+
+# apt_failure_note LOGFILE: why the upgrade failed, for the summary. Names
+# the packages dpkg stopped on and, when their maintainer scripts tried to
+# talk to systemd on a system that was not booted with it (sysvinit,
+# OpenRC, runit: Devuan, MX Linux, antiX, some containers), says so: that is
+# a bug in those packages' scripts, and apt cannot finish until they are
+# fixed or removed.
+apt_failure_note() {
+  local log="$1" pkgs
+  pkgs=$(apt_failed_packages "$log" | paste -sd ' ' -)
+  pkgs="${pkgs// /, }"
+  [ -n "$pkgs" ] || return 0
+  if ! systemd_running && grep -qE 'System has not been booted with systemd|Failed to connect to bus' "$log"; then
+    printf '%s could not be set up: its install script needs systemd, which this system does not run' "$pkgs"
+  else
+    printf 'dpkg stopped at %s' "$pkgs"
+  fi
+}
+
+# apt_failure_hint LOGFILE: what the user can do about it (log only).
+apt_failure_hint() {
+  local log="$1" pkgs first
+  pkgs=$(apt_failed_packages "$log" | paste -sd ' ' -)
+  [ -n "$pkgs" ] || return 0
+  first="${pkgs%% *}"
+  if ! systemd_running && grep -qE 'System has not been booted with systemd|Failed to connect to bus' "$log"; then
+    log_warn "the post-install script of $pkgs calls systemctl, which cannot work without systemd as init."
+    log_warn "apt will retry it on every run until it is fixed. If you do not need it: sudo apt-get remove $pkgs"
+    log_warn "otherwise report it to the package's maintainer (reportbug $first) and keep the error until a fixed version arrives."
+  else
+    log_warn "see the output above for why $pkgs failed; 'sudo dpkg --configure -a' retries the setup."
+  fi
+}
+
 # apt_refresh: apt-get update. apt exits 0 even when sources could not be
 # fetched (it keeps the old lists), so the output is inspected as well.
 # Returns 0 when every source was refreshed, 2 when some failed (the old
@@ -58,7 +109,7 @@ apt_refresh() {
 }
 
 pkg_apt_update() {
-  local log summary upgraded rc=0 refresh=0
+  local log summary upgraded rc=0 refresh=0 note
   log=$(tmp_file) || return 1
 
   if [ "$SU_DRY_RUN" = 1 ]; then
@@ -95,8 +146,10 @@ pkg_apt_update() {
     dist-upgrade || rc=$?
   if [ "$rc" -ne 0 ]; then
     log_warn "dist-upgrade failed; attempting apt-get -f install"
-    SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_root "${APT_ENV[@]}" apt-get -y -q -f install || true
-    step_fail "apt-get dist-upgrade failed ($(rc_note "$rc"))"
+    SU_RUN_TIMEOUT=$SU_PKG_TIMEOUT run_capture "$log" run_root "${APT_ENV[@]}" apt-get -y -q -f install || true
+    note=$(apt_failure_note "$log")
+    apt_failure_hint "$log"
+    step_fail "apt-get dist-upgrade failed ($(rc_note "$rc"))${note:+: $note}"
     return 0
   fi
   summary=$(apt_summary "$log")

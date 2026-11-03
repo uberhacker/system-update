@@ -19,6 +19,7 @@ The first source that gives an answer wins:
 | zypper | `zypper needs-rebooting` |
 | rpm-ostree | a staged deployment that is not booted yet |
 | any | the running kernel's modules directory is gone, i.e. a newer kernel replaced it |
+| any | the [firmware](firmware.md) step saw a firmware update waiting for the next boot (added to any reason above) |
 
 In containers the step is skipped.
 
