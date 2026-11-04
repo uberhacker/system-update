@@ -391,23 +391,36 @@ tool_github_binary_update() {
 }
 
 # phar_update NAME BIN CMD...: update a PHP phar (composer, wp, terminus)
-# that may live in a root-owned /usr/local/bin. Writable by us -> run as the
-# user; owned by a distro package -> skip; otherwise run as root (sudo).
+# that may live in a root-owned /usr/local/bin. A self-update writes a new
+# file next to the phar and renames it over the old one, so the user can do
+# it only when both the phar and its directory are writable (wp-cli refuses
+# with "/usr/local/bin is not writable by current user" otherwise). Both
+# writable by $SU_USER (checked as that user, since under sudo we are root)
+# -> run as the user; owned by a distro package -> skip; otherwise run as
+# root (sudo). The directory's ownership is never changed.
 # Returns the command's status, or 3 when the update was skipped (STEP_NOTE
 # then holds the reason).
 phar_update() {
   local name="$1" bin="$2"; shift 2
-  local real owner
+  local real owner dir
   real=$(readlink -f -- "$bin" 2>/dev/null || printf '%s' "$bin")
+  dir=$(dirname -- "$real")
   if owner=$(distro_pkg_owner "$real"); then
     step_skip "$bin belongs to $SU_PKG package '$owner' (updated with the system packages)"
     return 3
   fi
-  if [ -w "$real" ]; then
+  if user_can_write "$real" && user_can_write "$dir"; then
     do_user "$@"
   elif sudo_available; then
-    log_info "$real is not writable by $SU_USER; running the update as root"
+    if user_can_write "$real"; then
+      log_info "$dir is not writable by $SU_USER; running the $name update as root"
+    else
+      log_info "$real is not writable by $SU_USER; running the $name update as root"
+    fi
     do_root env COMPOSER_ALLOW_SUPERUSER=1 "$@"
+  elif user_can_write "$real"; then
+    step_skip "$dir is not writable by $SU_USER and sudo is unavailable"
+    return 3
   else
     step_skip "$real is not writable and sudo is unavailable"
     return 3

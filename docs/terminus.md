@@ -5,7 +5,7 @@ Updates [Terminus](https://github.com/pantheon-systems/terminus), Pantheon's com
 | | |
 | --- | --- |
 | Step name | `terminus` |
-| Runs as | the invoking user, or root when the phar is not writable by the user |
+| Runs as | the invoking user, or root when the phar or its directory is not writable by the user |
 | Detected when | `terminus` is on `PATH` |
 | Settings | `TIMEOUT` |
 

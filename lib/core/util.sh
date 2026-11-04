@@ -184,6 +184,18 @@ run_root_opt() {
   fi
 }
 
+# user_can_write PATH: can $SU_USER (not necessarily us: under sudo we are
+# root) write PATH? Quiet; false when it cannot be checked.
+user_can_write() {
+  if user_is_current; then
+    [ -w "$1" ]
+  elif has_cmd runuser; then
+    runuser -u "$SU_USER" -- test -w "$1" </dev/null >/dev/null 2>&1
+  else
+    sudo -n -u "$SU_USER" -- test -w "$1" </dev/null >/dev/null 2>&1
+  fi
+}
+
 do_root() {
   if [ "$SU_DRY_RUN" = 1 ]; then
     log_dry "would run (root): $*"
