@@ -48,7 +48,7 @@ Every command runs with stdin closed. The tool's own updater is killed after `TO
 ## Warnings
 
 * A Lando update can change the runtime your projects run on. Check the Lando release notes before updating in the middle of a project; `lando rebuild` may be needed afterwards.
-* Where Lando lives in a root-owned location, `lando update` fails without root; the step is then reported as failed rather than escalated with `sudo`.
+* Where Lando lives in a root-owned location, `lando update` fails without root; the step is then reported as failed rather than escalated with `sudo`, because Lando refuses to run as root.
 * The update replaces the tool in place. Close running sessions of it first if it holds files open.
 * To leave it alone: `--skip lando`, or `SKIP=lando` in the config file.
 

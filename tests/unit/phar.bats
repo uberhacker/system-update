@@ -33,13 +33,13 @@ setup() {
 @test "phar writable but its directory is not: updated as root (Ed's /usr/local/bin)" {
   NOT_WRITABLE="$bindir"
   phar_update wp-cli "$bindir/wp" wp cli update --yes
-  assert_equal "root env COMPOSER_ALLOW_SUPERUSER=1 wp cli update --yes" "$(cat "$RAN")"
+  assert_equal "root env HOME=/root COMPOSER_ALLOW_SUPERUSER=1 wp cli update --yes" "$(cat "$RAN")"
 }
 
 @test "phar not writable: updated as root" {
   NOT_WRITABLE="$bindir/wp"
   phar_update composer "$bindir/wp" composer self-update
-  assert_equal "root env COMPOSER_ALLOW_SUPERUSER=1 composer self-update" "$(cat "$RAN")"
+  assert_equal "root env HOME=/root COMPOSER_ALLOW_SUPERUSER=1 composer self-update" "$(cat "$RAN")"
 }
 
 @test "directory not writable and no sudo: skipped with the directory named" {
@@ -57,14 +57,14 @@ setup() {
   mv "$bindir/wp" "$realdir/wp-cli.phar"; ln -s "$realdir/wp-cli.phar" "$bindir/wp"
   NOT_WRITABLE="$realdir"
   phar_update wp-cli "$bindir/wp" wp cli update --yes
-  assert_contains "$(cat "$RAN")" "root env COMPOSER_ALLOW_SUPERUSER=1"
+  assert_contains "$(cat "$RAN")" "root env HOME=/root COMPOSER_ALLOW_SUPERUSER=1"
 }
 
 @test "wp-cli step: a root-owned /usr/local/bin no longer fails the step" {
   NOT_WRITABLE="$bindir"
   SU_TOOL_BIN[wp-cli]="$bindir/wp"
   tool_wp_cli_update
-  assert_contains "$(cat "$RAN")" "root env COMPOSER_ALLOW_SUPERUSER=1 wp cli update --yes --no-color --allow-root"
+  assert_contains "$(cat "$RAN")" "root env HOME=/root COMPOSER_ALLOW_SUPERUSER=1 wp cli update --yes --no-color --allow-root"
   assert_equal ok "$STEP_RESULT"
 }
 

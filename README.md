@@ -289,7 +289,10 @@ with a fallback on the managers that are actually present. Step name:
 Tools are discovered on the invoking user's `PATH` (and in the usual places
 such as `~/.nvm`, `~/.rvm`, `~/.local/bin`) and updated with their native
 mechanism. A tool that is not installed is simply not shown. Step name: the
-first column (also the group name `tools` for all of them).
+first column (also the group name `tools` for all of them). A tool that
+updates itself (`claude update`, `copilot update`, ...) runs as root, with
+`HOME=/root`, when its binary sits in a directory the user can't write, such
+as a root-owned `/usr/local/bin`; Lando, which refuses root, is the exception.
 
 | Step | Tool | How it is updated | Runs as | Notes |
 | --- | --- | --- | --- | --- |
