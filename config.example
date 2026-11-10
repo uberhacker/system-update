@@ -17,6 +17,12 @@
 # (master on the repository above).
 #SELF_UPDATE_BRANCH=
 
+# After each run, say when a newer release of system-update is published
+# (1, default), and apply it with --self-update right away (SELF_UPDATE_AUTO=1;
+# the new version is used from the next run).
+#SELF_UPDATE_CHECK=1
+#SELF_UPDATE_AUTO=0
+
 # Steps to skip or to run exclusively (comma separated). Names: system (or
 # the package manager name: apt, dnf, zypper, pacman, apk, ...), flatpak,
 # snap, firmware, reboot-check, tools, or any tool name from --list.

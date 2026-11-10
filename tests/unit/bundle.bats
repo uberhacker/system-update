@@ -167,3 +167,60 @@ release() {
 
   assert_equal "$before" "$(sha256sum < "$inst")"
 }
+
+@test "--install-user copies the single file to ~/.local/bin with its completion" {
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home"
+  HOME="$home" XDG_DATA_HOME= PATH="/usr/bin:/bin" run "$BUNDLE" --install-user --no-color --no-log
+  assert_equal 0 "$status"
+  [ -x "$home/.local/bin/system-update" ]
+  cmp -s "$BUNDLE" "$home/.local/bin/system-update"
+  grep -q '_system_update' "$home/.local/share/bash-completion/completions/system-update"
+  assert_contains "$output" "is not on your PATH"
+  # The installed copy knows it is installed.
+  HOME="$home" PATH="$home/.local/bin:/usr/bin:/bin" run "$home/.local/bin/system-update" --install-user --no-color --no-log
+  assert_equal 0 "$status"
+  assert_contains "$output" "already installed"
+  assert_not_contains "$output" "not on your PATH"
+}
+
+@test "--install puts it under the system prefix and replaces an older single file" {
+  local prefix="$BATS_TEST_TMPDIR/usr-local"
+  mkdir -p "$prefix/bin"
+  sed "s/^SU_BUNDLE_COMMIT=.*/SU_BUNDLE_COMMIT='old1234'/" "$BUNDLE" > "$prefix/bin/system-update"
+  SU_INSTALL_ROOT="$prefix" run "$BUNDLE" --install --no-color --no-log
+  assert_equal 0 "$status"
+  cmp -s "$BUNDLE" "$prefix/bin/system-update"
+  [ -f "$prefix/share/bash-completion/completions/system-update" ]
+  [ -z "$(find "$prefix/bin" -name '*.new.*')" ]
+}
+
+@test "--install refuses to overwrite something that is not system-update, and a checkout's link" {
+  local prefix="$BATS_TEST_TMPDIR/usr-local"
+  mkdir -p "$prefix/bin"
+  echo '#!/bin/sh' > "$prefix/bin/system-update"
+  SU_INSTALL_ROOT="$prefix" run "$BUNDLE" --install --no-color --no-log
+  assert_equal 1 "$status"
+  assert_contains "$output" "not a single-file build"
+  assert_equal '#!/bin/sh' "$(cat "$prefix/bin/system-update")"
+  rm "$prefix/bin/system-update"
+  ln -s "$REPO_ROOT/bin/system-update" "$prefix/bin/system-update"
+  SU_INSTALL_ROOT="$prefix" run "$BUNDLE" --install --no-color --no-log
+  assert_equal 1 "$status"
+  assert_contains "$output" "installation from a checkout"
+  [ -L "$prefix/bin/system-update" ]
+}
+
+@test "--install --dry-run changes nothing" {
+  local prefix="$BATS_TEST_TMPDIR/usr-local"
+  SU_INSTALL_ROOT="$prefix" run "$BUNDLE" --install --dry-run --no-color --no-log
+  assert_equal 0 "$status"
+  assert_contains "$output" "would install"
+  [ ! -e "$prefix" ]
+}
+
+@test "from a checkout, --install-user hands over to install.sh --user" {
+  run "$REPO_ROOT/system-update" --install-user --dry-run --no-color --no-log
+  assert_equal 0 "$status"
+  assert_contains "$output" "would run: $REPO_ROOT/install.sh --user"
+}

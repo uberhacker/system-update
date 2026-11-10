@@ -15,6 +15,7 @@ SU_ARG_QUIET=""
 SU_ARG_COLOR=""
 SU_ARG_FIRMWARE=""
 SU_ARG_SELF_UPDATE=0
+SU_ARG_INSTALL=""
 SU_ARG_UNDO_FLATPAK=0
 SU_ARG_SOURCE=""
 SU_ARG_BRANCH=""
@@ -80,6 +81,9 @@ Options:
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
+      --install           install this program system-wide (/usr/local/bin, uses sudo) and exit;
+                          a single file copies itself, a checkout runs its install.sh
+      --install-user      the same into ~/.local/bin, for the invoking user only
       --completion SHELL  print the bash completion script and exit
                           (source <(system-update --completion bash))
       --version           print the version and exit
@@ -142,6 +146,8 @@ args_parse() {
       --no-log) SU_ARG_LOGGING=0; SU_LOG_PATH="" ;;
       --undo-flatpak) SU_ARG_UNDO_FLATPAK=1 ;;
       --self-update) SU_ARG_SELF_UPDATE=1 ;;
+      --install) SU_ARG_INSTALL=system ;;
+      --install-user) SU_ARG_INSTALL=user ;;
       --source) args_need "$opt" "${2:-}" || return 2; SU_ARG_SOURCE="$2"; shift ;;
       --branch) args_need "$opt" "${2:-}" || return 2; SU_ARG_BRANCH="$2"; shift ;;
       --version|-V) SU_ARG_VERSION=1 ;;
