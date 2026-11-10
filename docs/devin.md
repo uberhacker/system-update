@@ -32,7 +32,7 @@ The Devin CLI, updated with its own `devin update` command.
    Before `devin update`, the installed version is compared with the public release manifest the official installer uses (`https://static.devin.ai/cli/current/manifest.json`). When they match, the step reports `up to date` and `devin update` is not run at all: without a terminal it can sit until the timeout even when there is nothing to do. When the manifest can't be read, `devin update` runs as before.
 4. **Compare.** The probe runs again; the summary shows `old -> new`, or `up to date (X)`.
 
-Every command runs with stdin closed. The tool's own updater is killed after `TOOL_TIMEOUT` seconds (120 by default); a package manager update after `TIMEOUT` seconds (300 by default).
+Every command runs with stdin closed. The tool's own updater is killed after `TOOL_TIMEOUT` seconds (120 by default); a package manager update after `TIMEOUT` seconds (300 by default). When `devin update` is stopped by the timeout, the version is read again: if the new version is already in place the step reports it as updated (the updater only failed to exit); otherwise it fails and says to run `devin update` in a terminal to see what it is waiting for.
 
 ## What will be affected
 

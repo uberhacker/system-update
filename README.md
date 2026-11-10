@@ -744,7 +744,7 @@ runs; `--dry-run` from a timer is a safe way to get a daily report instead.
 | `GitHub API rate limit reached` | Unauthenticated GitHub lookups are limited to 60 an hour; the rest of the run skips them. | Set `GITHUB_TOKEN` (any token, no scopes needed) in the config file or environment. |
 | `sudo credentials unavailable` / system step skipped | `sudo` asked for a password and none was given, or the run is not interactive. | Run it from a terminal, or add a `NOPASSWD` rule for unattended runs. |
 | `timed out after 300s` | A third-party command ran longer than `TIMEOUT`. | `--timeout 900`, or `TIMEOUT=900` in the config. Package managers have their own one-hour limit. |
-| `update command failed (timed out after 120s)` | A tool's own updater ran longer than `TOOL_TIMEOUT`. | `TOOL_TIMEOUT=300` in the config. |
+| `update command failed (timed out after 120s; still X; run '... update' in a terminal)` | A tool's own updater ran longer than `TOOL_TIMEOUT` and the version did not change. (When the new version is in place and only the updater failed to exit, the step reports it as updated instead.) | Run the named command in a terminal to see what it is waiting for, or `TOOL_TIMEOUT=300` in the config. |
 | `⚠ warn apt: ... package source(s) could not be refreshed` | A repository was unreachable; apt used the old lists for it. | Check the source in `/etc/apt/sources.list.d`; the rest of the upgrade went ahead. |
 | `⚠ warn reboot-check: reboot required` | A new kernel, a staged ostree deployment or a package asked for a reboot. | Reboot when convenient. |
 | A tool you use is not in the summary | It was not found on your `PATH`, or it is not supported. | `--list` shows every tool that was detected and where. |

@@ -340,7 +340,23 @@ tool_standard() {
     fi
   fi
   if [ "$rc" -ne 0 ]; then
-    step_fail "update command failed ($(SU_RUN_TIMEOUT=${tmo:-${SU_RUN_TIMEOUT:-$SU_TIMEOUT}} rc_note "$rc"))"
+    local why
+    why=$(SU_RUN_TIMEOUT=${tmo:-${SU_RUN_TIMEOUT:-$SU_TIMEOUT}} rc_note "$rc")
+    # A self-updater that was stopped by the timeout may already have put
+    # the new version in place and only failed to exit ("devin update"
+    # without a terminal): look before calling it a failure.
+    if [ -n "$tmo" ] && { [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; } && [ ${#probe[@]} -gt 0 ]; then
+      after=$(version_from_text "$(tool_probe "$bin" "${probe[@]}")")
+      if [ -n "$before" ] && [ -n "$after" ] && [ "$before" != "$after" ]; then
+        log_warn "'${cmd[*]}' installed $after but did not exit; it was stopped after ${tmo}s"
+        step_updated "$before -> $after (the updater did not exit and was stopped after ${tmo}s)"
+        return 0
+      fi
+      log_warn "run '${cmd[*]}' in a terminal to see what it is waiting for, or raise TOOL_TIMEOUT"
+      step_fail "update command failed ($why; still ${after:-${before:-unknown}}; run '${cmd[*]}' in a terminal)"
+      return 0
+    fi
+    step_fail "update command failed ($why)"
     return 0
   fi
   if [ ${#probe[@]} -gt 0 ]; then
