@@ -40,6 +40,10 @@ Every command runs with stdin closed. The tool's own updater is killed after `TO
 * Files belong to the invoking user. The one exception: when the tool updates itself and its binary sits in a directory the user can't write (for example a root-owned `/usr/local/bin`, where its installer puts it under `sudo`), the updater has to create files next to the binary, so it runs as root through `sudo`, with `HOME=/root` so nothing root-owned lands in the user's home. The directory's ownership is never changed.
 * Configuration, credentials and history of the tool are left alone by this script (the tool's own updater may migrate them).
 
+## Moving it out of /usr/local/bin
+
+With `--move-to-home devin` (or `MOVE_TO_HOME=devin`), a copy in a root-owned directory is moved to `~/.local/bin` once (when that directory is on your `PATH` ahead of the old one), so later updates run as you without sudo. See [Third-party tools](../README.md#third-party-tools).
+
 ## Dry run and `--detailed`
 
 `--dry-run` identifies and probes the binary, then reports `would update via npm (@pkg)` or `would run 'devin update'` with the installed version. Nothing is installed.

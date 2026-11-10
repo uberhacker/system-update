@@ -294,6 +294,16 @@ updates itself (`claude update`, `copilot update`, ...) runs as root, with
 `HOME=/root`, when its binary sits in a directory the user can't write, such
 as a root-owned `/usr/local/bin`; Lando, which refuses root, is the exception.
 
+To stop needing sudo for those, move them into your home once:
+`--move-to-home wp-cli,terminus,copilot` (or `MOVE_TO_HOME=...` in the
+config; `all` covers every self-updating tool). Each named tool found in a
+root-owned directory is copied to `~/.local/bin`, checked, and the old copy
+removed with sudo; from then on its updater runs as you. It is only done for
+a plain file that no distro package owns, when `~/.local/bin` is on your
+`PATH` ahead of the old directory (otherwise it says which line to add to
+`~/.profile`), and never over a different file of the same name. To undo:
+`sudo mv ~/.local/bin/NAME /usr/local/bin/NAME`.
+
 | Step | Tool | How it is updated | Runs as | Notes |
 | --- | --- | --- | --- | --- |
 | [`nvm`](docs/nvm.md) | Node.js via nvm | installs the current LTS with `--reinstall-packages-from`, makes it the default | user | old versions kept unless `--prune-node` |
@@ -480,6 +490,9 @@ Options:
       --install-jq        allow installing jq with the package manager when missing
       --allow-unverified-installers
                           allow vendor "curl | sh" installers (ollama, AnythingLLM)
+      --move-to-home LIST move these self-updating tools (wp-cli, terminus, copilot,
+                          ... or "all") from a root-owned directory to ~/.local/bin,
+                          so their updates no longer need sudo
       --aur               run an AUR helper (yay/paru) as the invoking user on Arch
       --no-autoremove     do not remove orphaned packages after upgrading
       --log FILE          write this run's log to FILE (default: a new file in
@@ -584,6 +597,7 @@ ignored. See [`config.example`](config.example).
 | `SELF_UPDATE_CHECK` | `1` | after a run, say when `SELF_UPDATE_REPO` has published a newer release than this program |
 | `SELF_UPDATE_AUTO` | `0` | after a run, apply a newer release with `--self-update` (used from the next start) |
 | `SKIP` / `ONLY` | empty | comma separated step names |
+| `MOVE_TO_HOME` | empty | self-updating tools to move from a root-owned directory to `~/.local/bin` (`--move-to-home`; `all` for every one) |
 | `TIMEOUT` | `300` | seconds a third-party tool may run |
 | `TOOL_TIMEOUT` | `120` | seconds a tool's own self-update command (`claude update`, `devin update`, ...) may run |
 | `PROBE_TIMEOUT` | `20` | seconds a `--version` probe (and the npm and git lookups of `--detailed`) may take |

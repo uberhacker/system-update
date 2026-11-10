@@ -29,6 +29,11 @@
 #SKIP=snap,composer
 #ONLY=
 
+# Self-updating tools (wp-cli, terminus, copilot, devin, ... or all) to move
+# out of a root-owned directory such as /usr/local/bin into ~/.local/bin, so
+# their own updaters run as you without sudo. Needs ~/.local/bin on PATH.
+#MOVE_TO_HOME=wp-cli,terminus,copilot
+
 # Seconds a third-party tool may take before it is killed (default 300).
 #TIMEOUT=300
 

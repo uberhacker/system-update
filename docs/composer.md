@@ -27,6 +27,10 @@ Updates [Composer](https://getcomposer.org) itself, the invoking user's global p
 * Tools installed with `cgr` (each in its own directory) and the Drush versions managed by `drush-versions`.
 * The Composer download cache is emptied.
 
+## Moving it out of /usr/local/bin
+
+With `--move-to-home composer` (or `MOVE_TO_HOME=composer`), a copy in a root-owned directory is moved to `~/.local/bin` once (when that directory is on your `PATH` ahead of the old one), so later updates run as you without sudo. See [Third-party tools](../README.md#third-party-tools).
+
 ## Dry run and `--detailed`
 
 `--dry-run` prints the commands it would run (`would run: composer global update ...`) and changes nothing.

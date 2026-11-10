@@ -18,6 +18,10 @@ Updates [WP-CLI](https://wp-cli.org) with `wp cli update`.
 * The `wp` phar, replaced in place with the latest stable release.
 * WordPress sites, plugins and themes are **not** touched; this only updates the WP-CLI tool.
 
+## Moving it out of /usr/local/bin
+
+With `--move-to-home wp-cli` (or `MOVE_TO_HOME=wp-cli`), a copy in a root-owned directory is moved to `~/.local/bin` once (when that directory is on your `PATH` ahead of the old one), so later updates run as you without sudo. See [Third-party tools](../README.md#third-party-tools).
+
 ## Dry run and `--detailed`
 
 `--dry-run` reports `would run wp cli update (installed X)`. `--detailed` also looks up the latest GitHub release of `wp-cli/wp-cli` and reports `up to date` or `installed -> latest`.

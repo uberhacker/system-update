@@ -16,6 +16,7 @@ SU_ARG_COLOR=""
 SU_ARG_FIRMWARE=""
 SU_ARG_SELF_UPDATE=0
 SU_ARG_INSTALL=""
+SU_ARG_MOVE_TO_HOME=""
 SU_ARG_UNDO_FLATPAK=0
 SU_ARG_SOURCE=""
 SU_ARG_BRANCH=""
@@ -64,6 +65,9 @@ Options:
       --install-jq        allow installing jq with the package manager when missing
       --allow-unverified-installers
                           allow vendor "curl | sh" installers (ollama, AnythingLLM)
+      --move-to-home LIST move these self-updating tools (wp-cli, terminus, copilot,
+                          ... or "all") from a root-owned directory to ~/.local/bin,
+                          so their updates no longer need sudo
       --aur               run an AUR helper (yay/paru) as the invoking user on Arch
       --no-autoremove     do not remove orphaned packages after upgrading
       --log FILE          write this run's log to FILE (default: a new file in
@@ -135,6 +139,7 @@ args_parse() {
       --prune-node) SU_ARG_PRUNE_NODE=1 ;;
       --install-jq) SU_ARG_INSTALL_JQ=1 ;;
       --allow-unverified-installers) SU_ARG_UNVERIFIED=1 ;;
+      --move-to-home) args_need "$opt" "${2:-}" || return 2; SU_ARG_MOVE_TO_HOME="$2"; shift ;;
       --aur) SU_ARG_AUR=1 ;;
       --no-autoremove) SU_ARG_AUTOREMOVE=0 ;;
       --nvim-plugins) SU_ARG_NVIM_PLUGINS=1 ;;
@@ -185,6 +190,7 @@ args_parse() {
 args_apply() {
   [ -n "$SU_ARG_ONLY" ] && config_set ONLY "$SU_ARG_ONLY" flag
   [ -n "$SU_ARG_SKIP" ] && config_set SKIP "$SU_ARG_SKIP" flag
+  [ -n "$SU_ARG_MOVE_TO_HOME" ] && config_set MOVE_TO_HOME "$SU_ARG_MOVE_TO_HOME" flag
   [ -n "$SU_ARG_TIMEOUT" ] && { config_set TIMEOUT "$SU_ARG_TIMEOUT" flag || return 2; }
   [ -n "$SU_ARG_COLOR" ] && { config_set COLOR "$SU_ARG_COLOR" flag || return 2; }
   [ -n "$SU_ARG_FIRMWARE" ] && config_set FIRMWARE "$SU_ARG_FIRMWARE" flag

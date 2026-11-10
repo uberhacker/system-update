@@ -206,6 +206,7 @@ run_user_tools_as_sudo_user() {
   cfg_bool RUNTIMES && args+=(--runtimes)
   cfg_bool NPM_GLOBALS && args+=(--npm-globals)
   cfg_bool CONTAINERS && args+=(--containers)
+  [ -n "$(cfg MOVE_TO_HOME)" ] && args+=(--move-to-home "$(cfg MOVE_TO_HOME)")
   if [ -n "$childlog" ]; then args+=(--log "$childlog"); else args+=(--no-log); fi
 
   log_info "running user-level tools as $SU_USER"
