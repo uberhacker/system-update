@@ -289,7 +289,10 @@ with a fallback on the managers that are actually present. Step name:
 Tools are discovered on the invoking user's `PATH` (and in the usual places
 such as `~/.nvm`, `~/.rvm`, `~/.local/bin`) and updated with their native
 mechanism. A tool that is not installed is simply not shown. Step name: the
-first column (also the group name `tools` for all of them).
+first column (also the group name `tools` for all of them). A tool that
+updates itself (`claude update`, `copilot update`, ...) runs as root, with
+`HOME=/root`, when its binary sits in a directory the user can't write, such
+as a root-owned `/usr/local/bin`; Lando, which refuses root, is the exception.
 
 | Step | Tool | How it is updated | Runs as | Notes |
 | --- | --- | --- | --- | --- |
@@ -304,9 +307,9 @@ first column (also the group name `tools` for all of them).
 | [`hermes`](docs/hermes.md) | Hermes Agent | `uv tool`/`pipx`, or `hermes update` | user | |
 | [`zcmds`](docs/zcmds.md) | zcmds | `pipx upgrade` / `uv tool upgrade` | user | |
 | [`lando`](docs/lando.md) | Lando | `lando update -y` | user | |
-| [`composer`](docs/composer.md) | Composer | `self-update`, `global update`, `cgr update`, `drush-versions up` | user; `self-update` as root for a root-owned phar | global packages can move to new majors |
-| [`terminus`](docs/terminus.md) | Pantheon Terminus | `terminus self:update` | user, or root for a root-owned phar | |
-| [`wp-cli`](docs/wp-cli.md) | WP-CLI | `wp cli update --yes` | user, or root for a root-owned phar | WordPress sites are not touched |
+| [`composer`](docs/composer.md) | Composer | `self-update`, `global update`, `cgr update`, `drush-versions up` | user; `self-update` as root for a root-owned phar or directory | global packages can move to new majors |
+| [`terminus`](docs/terminus.md) | Pantheon Terminus | `terminus self:update` | user, or root for a root-owned phar or directory | |
+| [`wp-cli`](docs/wp-cli.md) | WP-CLI | `wp cli update --yes` | user, or root for a root-owned phar or directory | WordPress sites are not touched |
 | [`docker-compose`](docs/docker-compose.md) | standalone Docker Compose | GitHub release, sha256-verified, `install -m 0755` | user or root, whoever can write the binary | the `docker compose` plugin is left to the package manager |
 | [`codium`](docs/codium.md) | VSCodium | `.deb`/`.rpm` release asset, sha256-verified, installed with the package manager | root | only when no repository provides it |
 | [`ollama`](docs/ollama.md) | Ollama | vendor installer | root | only when it installed Ollama, or with `--allow-unverified-installers` |

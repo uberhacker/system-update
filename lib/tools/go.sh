@@ -35,9 +35,10 @@ go_latest_info() {
   printf '%s %s %s\n' "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[1]}"
 }
 
-# go_priv CMD...: as root unless the parent of SU_GO_ROOT is ours to write.
+# go_priv CMD...: as root unless the parent of SU_GO_ROOT is the user's to
+# write (checked as $SU_USER: under sudo this script is root).
 go_priv() {
-  if [ -w "$(dirname "$SU_GO_ROOT")" ]; then do_user "$@"; else do_root "$@"; fi
+  if user_can_write "$(dirname "$SU_GO_ROOT")"; then do_user "$@"; else do_root "$@"; fi
 }
 
 tool_go_update() {

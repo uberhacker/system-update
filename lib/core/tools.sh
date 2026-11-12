@@ -322,7 +322,22 @@ tool_standard() {
     # longer TIMEOUT: "devin update" and friends finish in seconds or not
     # at all, and a hung one should not hold the run for five minutes.
     tmo="${SU_RUN_TIMEOUT:-$SU_TOOL_TIMEOUT}"
-    SU_RUN_TIMEOUT=$tmo do_user "${cmd[@]}" || rc=$?
+    # A standalone binary in a root-owned directory (copilot's installer
+    # puts it in /usr/local/bin when run with sudo) can only replace itself
+    # as root. TOOL_NO_ROOT=1 (lando, which refuses to run as root) keeps
+    # the user.
+    local real
+    real=$(readlink -f -- "$bin" 2>/dev/null || printf '%s' "$bin")
+    if [ "${TOOL_NO_ROOT:-0}" = 1 ]; then
+      SELF_UPDATE_AS=user
+    else
+      self_update_who "$name" "$real" || return 0
+    fi
+    if [ "$SELF_UPDATE_AS" = user ]; then
+      SU_RUN_TIMEOUT=$tmo do_user "${cmd[@]}" || rc=$?
+    else
+      SU_RUN_TIMEOUT=$tmo self_update_root "${cmd[@]}" || rc=$?
+    fi
   fi
   if [ "$rc" -ne 0 ]; then
     step_fail "update command failed ($(SU_RUN_TIMEOUT=${tmo:-${SU_RUN_TIMEOUT:-$SU_TIMEOUT}} rc_note "$rc"))"
@@ -390,9 +405,50 @@ tool_github_binary_update() {
   step_updated "$installed -> $(version_norm "$latest")"
 }
 
+# self_update_who NAME REAL: who runs an updater that replaces REAL in place
+# (a phar's self-update, `copilot update`, ...). Such updaters write a new
+# file or a temp folder next to REAL and rename it over the old one, so the
+# user can run them only when they can write both REAL and its directory
+# (checked as $SU_USER: under sudo this script is root). Sets SELF_UPDATE_AS
+# to "user" or "root"; when neither can, records a skip and returns 3. The
+# directory's ownership is never changed.
+SELF_UPDATE_AS=""
+self_update_who() {
+  local name="$1" real="$2" dir
+  dir=$(dirname -- "$real")
+  SELF_UPDATE_AS=""
+  if user_can_write "$real" && user_can_write "$dir"; then
+    SELF_UPDATE_AS=user
+    return 0
+  fi
+  if sudo_available; then
+    if user_can_write "$real"; then
+      log_info "$dir is not writable by $SU_USER; running the $name update as root"
+    else
+      log_info "$real is not writable by $SU_USER; running the $name update as root"
+    fi
+    SELF_UPDATE_AS=root
+    return 0
+  fi
+  if user_can_write "$real"; then
+    step_skip "$dir is not writable by $SU_USER and sudo is unavailable"
+  else
+    step_skip "$real is not writable and sudo is unavailable"
+  fi
+  return 3
+}
+
+# self_update_root [VAR=VALUE...] CMD...: run CMD as root with root's own HOME, so caches
+# and settings the updater writes don't land root-owned in the user's home.
+self_update_root() {
+  do_root env HOME="${SU_ROOT_HOME:-/root}" "$@"
+}
+
 # phar_update NAME BIN CMD...: update a PHP phar (composer, wp, terminus)
-# that may live in a root-owned /usr/local/bin. Writable by us -> run as the
-# user; owned by a distro package -> skip; otherwise run as root (sudo).
+# that may live in a root-owned /usr/local/bin. Owned by a distro package
+# -> skip; otherwise as the user or as root, as self_update_who decides
+# (wp-cli refuses with "/usr/local/bin is not writable by current user"
+# when only the phar is the user's).
 # Returns the command's status, or 3 when the update was skipped (STEP_NOTE
 # then holds the reason).
 phar_update() {
@@ -403,14 +459,11 @@ phar_update() {
     step_skip "$bin belongs to $SU_PKG package '$owner' (updated with the system packages)"
     return 3
   fi
-  if [ -w "$real" ]; then
+  self_update_who "$name" "$real" || return 3
+  if [ "$SELF_UPDATE_AS" = user ]; then
     do_user "$@"
-  elif sudo_available; then
-    log_info "$real is not writable by $SU_USER; running the update as root"
-    do_root env COMPOSER_ALLOW_SUPERUSER=1 "$@"
   else
-    step_skip "$real is not writable and sudo is unavailable"
-    return 3
+    self_update_root COMPOSER_ALLOW_SUPERUSER=1 "$@"
   fi
 }
 

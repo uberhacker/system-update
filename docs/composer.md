@@ -5,7 +5,7 @@ Updates [Composer](https://getcomposer.org) itself, the invoking user's global p
 | | |
 | --- | --- |
 | Step name | `composer` |
-| Runs as | the invoking user; `composer self-update` as root when the phar is not writable by the user |
+| Runs as | the invoking user; `composer self-update` as root when the phar or its directory is not writable by the user |
 | Detected when | `composer` is on `PATH` |
 | Settings | `TIMEOUT` |
 
@@ -13,8 +13,8 @@ Updates [Composer](https://getcomposer.org) itself, the invoking user's global p
 
 1. **Composer itself** (`composer self-update --no-interaction --no-ansi`):
    * phar owned by a distro package: skipped, the system package step updates it;
-   * phar writable by the user: run as the user;
-   * otherwise (for example `/usr/local/bin/composer` owned by root): run as root through `sudo`, with `COMPOSER_ALLOW_SUPERUSER=1`;
+   * phar and its directory writable by the user: run as the user (the update writes a new file next to the phar, so the directory matters too);
+   * otherwise (for example a root-owned `/usr/local/bin`): run as root through `sudo`, with `COMPOSER_ALLOW_SUPERUSER=1`;
    * not writable and no `sudo`: skipped.
 2. **Global packages**: `composer global update --no-interaction --no-ansi --no-progress` as the user.
 3. `cgr update` when `cgr` is installed, `drush-versions up` when `drush-versions` is installed.
