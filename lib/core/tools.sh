@@ -340,7 +340,23 @@ tool_standard() {
     fi
   fi
   if [ "$rc" -ne 0 ]; then
-    step_fail "update command failed ($(SU_RUN_TIMEOUT=${tmo:-${SU_RUN_TIMEOUT:-$SU_TIMEOUT}} rc_note "$rc"))"
+    local why
+    why=$(SU_RUN_TIMEOUT=${tmo:-${SU_RUN_TIMEOUT:-$SU_TIMEOUT}} rc_note "$rc")
+    # A self-updater that was stopped by the timeout may already have put
+    # the new version in place and only failed to exit ("devin update"
+    # without a terminal): look before calling it a failure.
+    if [ -n "$tmo" ] && { [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; } && [ ${#probe[@]} -gt 0 ]; then
+      after=$(version_from_text "$(tool_probe "$bin" "${probe[@]}")")
+      if [ -n "$before" ] && [ -n "$after" ] && [ "$before" != "$after" ]; then
+        log_warn "'${cmd[*]}' installed $after but did not exit; it was stopped after ${tmo}s"
+        step_updated "$before -> $after (the updater did not exit and was stopped after ${tmo}s)"
+        return 0
+      fi
+      log_warn "run '${cmd[*]}' in a terminal to see what it is waiting for, or raise TOOL_TIMEOUT"
+      step_fail "update command failed ($why; still ${after:-${before:-unknown}}; run '${cmd[*]}' in a terminal)"
+      return 0
+    fi
+    step_fail "update command failed ($why)"
     return 0
   fi
   if [ ${#probe[@]} -gt 0 ]; then
@@ -495,6 +511,111 @@ tools_run_all() {
     fi
     fn=$(tool_fn "$name" update)
     declare -F "$fn" >/dev/null || continue
-    run_step tools "$name" "$fn"
+    if [ "$scope" = user ] && tool_move_home_wanted "$name"; then
+      run_step tools "$name" tool_move_home_then "$name" "$fn"
+    else
+      run_step tools "$name" "$fn"
+    fi
   done
+}
+
+# ---------------------------------------------------------------------------
+# MOVE_TO_HOME (--move-to-home LIST): move a self-updating tool out of a
+# directory only root can write (/usr/local/bin) into ~/.local/bin, so its
+# own updater runs as the user, with no sudo, from then on. Opt-in, per tool.
+# ---------------------------------------------------------------------------
+
+# tool_move_home_wanted NAME: is NAME (or "all") in MOVE_TO_HOME?
+tool_move_home_wanted() {
+  local list
+  list=$(cfg MOVE_TO_HOME)
+  [ -n "$list" ] || return 1
+  list_has "$list" "$1" || list_has "$list" all
+}
+
+# tool_move_home_then NAME UPDATE_FN: the step body when NAME is to be moved:
+# move it if it can and should be, then run the update as usual.
+tool_move_home_then() {
+  local name="$1" fn="$2"
+  tool_move_home "$name" || true
+  "$fn"
+}
+
+# tool_move_home NAME: move SU_TOOL_BIN[NAME] to ~/.local/bin and point
+# SU_TOOL_BIN at the new copy. Only a plain file that the user cannot
+# write, in a directory the user cannot write, that no distro package owns,
+# and only when ~/.local/bin is on the user's PATH ahead of the old place
+# (otherwise the shell would keep finding the old one). The copy is made
+# and checked before the old file is removed (with sudo). Returns 0 when
+# moved, 1 when left where it is (the reason is logged).
+tool_move_home() {
+  local name="$1" bin real dir dest owner home_bin="$SU_USER_HOME/.local/bin"
+  bin="${SU_TOOL_BIN[$name]}"
+  [ -n "$bin" ] || return 1
+  real=$(readlink -f -- "$bin" 2>/dev/null || printf '%s' "$bin")
+  dir=$(dirname -- "$real")
+  if [ "$dir" = "$home_bin" ] || { user_can_write "$real" && user_can_write "$dir"; }; then
+    log_detail "$name: $real is already the user's to update; nothing to move"
+    return 1
+  fi
+  if [ "$real" != "$bin" ]; then
+    log_warn "$name: $bin is a link to $real; not moved (move the installation by hand)"
+    return 1
+  fi
+  if [ ! -f "$real" ]; then
+    log_warn "$name: $real is not a plain file; not moved"
+    return 1
+  fi
+  if owner=$(distro_pkg_owner "$real"); then
+    log_warn "$name: $real belongs to $SU_PKG package '$owner'; not moved"
+    return 1
+  fi
+  dest="$home_bin/$(basename -- "$real")"
+  if ! tool_move_home_on_path "$home_bin" "$dir"; then
+    log_warn "$name: $home_bin is not on your PATH ahead of $dir, so a copy there would not be used; not moved. Add this line to ~/.profile (or ~/.bashrc), open a new shell and run again:"
+    log_plain "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    return 1
+  fi
+  if [ -e "$dest" ] && ! cmp -s -- "$real" "$dest"; then
+    log_warn "$name: $dest already exists and differs from $real; not moved"
+    return 1
+  fi
+  if ! sudo_available; then
+    log_warn "$name: removing $real needs sudo, which is unavailable; not moved"
+    return 1
+  fi
+  if [ "$SU_DRY_RUN" = 1 ]; then
+    log_dry "would move $real to $dest (MOVE_TO_HOME)"
+    return 1
+  fi
+  log_info "moving $real to $dest (MOVE_TO_HOME)"
+  if ! { do_user mkdir -p -- "$home_bin" && do_user cp -- "$real" "$dest.new.$$" \
+         && do_user chmod 0755 "$dest.new.$$" && cmp -s -- "$real" "$dest.new.$$" \
+         && do_user mv -f -- "$dest.new.$$" "$dest"; }; then
+    do_user rm -f -- "$dest.new.$$" || true
+    log_warn "$name: could not copy $real to $dest; left where it was"
+    return 1
+  fi
+  if ! do_root rm -f -- "$real"; then
+    log_warn "$name: copied to $dest but could not remove $real; the old copy is still first on PATH unless $home_bin comes earlier"
+    SU_TOOL_BIN[$name]="$dest"
+    return 0
+  fi
+  SU_TOOL_BIN[$name]="$dest"
+  hash -r 2>/dev/null || true
+  log_ok "$name moved to $dest; its updates no longer need sudo (to undo: sudo mv $dest $real)"
+  return 0
+}
+
+# tool_move_home_on_path HOME_BIN OLD_DIR: does the user's PATH have
+# HOME_BIN before OLD_DIR (or OLD_DIR not at all)?
+tool_move_home_on_path() {
+  local home_bin="$1" old="$2" p seen_home=0
+  local IFS=:
+  for p in $PATH; do
+    p="${p%/}"
+    [ "$p" = "$home_bin" ] && seen_home=1 && continue
+    [ "$p" = "$old" ] && break
+  done
+  [ "$seen_home" = 1 ]
 }

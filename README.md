@@ -294,6 +294,16 @@ updates itself (`claude update`, `copilot update`, ...) runs as root, with
 `HOME=/root`, when its binary sits in a directory the user can't write, such
 as a root-owned `/usr/local/bin`; Lando, which refuses root, is the exception.
 
+To stop needing sudo for those, move them into your home once:
+`--move-to-home wp-cli,terminus,copilot` (or `MOVE_TO_HOME=...` in the
+config; `all` covers every self-updating tool). Each named tool found in a
+root-owned directory is copied to `~/.local/bin`, checked, and the old copy
+removed with sudo; from then on its updater runs as you. It is only done for
+a plain file that no distro package owns, when `~/.local/bin` is on your
+`PATH` ahead of the old directory (otherwise it says which line to add to
+`~/.profile`), and never over a different file of the same name. To undo:
+`sudo mv ~/.local/bin/NAME /usr/local/bin/NAME`.
+
 | Step | Tool | How it is updated | Runs as | Notes |
 | --- | --- | --- | --- | --- |
 | [`nvm`](docs/nvm.md) | Node.js via nvm | installs the current LTS with `--reinstall-packages-from`, makes it the default | user | old versions kept unless `--prune-node` |
@@ -401,8 +411,19 @@ From a release (each `v*` tag publishes `system-update` and its `.sha256`):
 $ curl -fLO https://github.com/uberhacker/system-update/releases/latest/download/system-update
 $ curl -fLO https://github.com/uberhacker/system-update/releases/latest/download/system-update.sha256
 $ sha256sum -c system-update.sha256
-$ sudo install -m 0755 system-update /usr/local/bin/system-update
+$ chmod +x system-update
+$ ./system-update --install          # /usr/local/bin, asks for sudo once
+$ ./system-update --install-user     # or ~/.local/bin, no sudo
 ```
+
+`--install` copies the file to `/usr/local/bin/system-update` (owned by
+root) and writes its bash completion next to the system's;
+`--install-user` puts it in `~/.local/bin` and
+`~/.local/share/bash-completion/completions` instead and says how to add
+`~/.local/bin` to `PATH` when it is missing. Run from a checkout, both hand
+over to `install.sh` (`--install-user` = `install.sh --user`). Neither
+overwrites a file that is not a single-file build of system-update, or a
+checkout's installation.
 
 Or build it from a checkout:
 
@@ -469,6 +490,9 @@ Options:
       --install-jq        allow installing jq with the package manager when missing
       --allow-unverified-installers
                           allow vendor "curl | sh" installers (ollama, AnythingLLM)
+      --move-to-home LIST move these self-updating tools (wp-cli, terminus, copilot,
+                          ... or "all") from a root-owned directory to ~/.local/bin,
+                          so their updates no longer need sudo
       --aur               run an AUR helper (yay/paru) as the invoking user on Arch
       --no-autoremove     do not remove orphaned packages after upgrading
       --log FILE          write this run's log to FILE (default: a new file in
@@ -486,6 +510,9 @@ Options:
       --self-update       update this script from its git source and exit
       --source URL        git source for --self-update (https only)
       --branch NAME       branch for --self-update (default: the remote's default branch)
+      --install           install this program system-wide (/usr/local/bin, uses sudo) and exit;
+                          a single file copies itself, a checkout runs its install.sh
+      --install-user      the same into ~/.local/bin, for the invoking user only
       --completion SHELL  print the bash completion script and exit
                           (source <(system-update --completion bash))
       --version           print the version and exit
@@ -567,7 +594,10 @@ ignored. See [`config.example`](config.example).
 | --- | --- | --- |
 | `SELF_UPDATE_REPO` | `https://github.com/uberhacker/system-update` | source for `--self-update` (https only); unset, a git checkout follows its own origin |
 | `SELF_UPDATE_BRANCH` | empty | branch for `--self-update`; empty follows the checkout's branch if the remote has it, else the remote's default branch (`master` here) |
+| `SELF_UPDATE_CHECK` | `1` | after a run, say when `SELF_UPDATE_REPO` has published a newer release than this program |
+| `SELF_UPDATE_AUTO` | `0` | after a run, apply a newer release with `--self-update` (used from the next start) |
 | `SKIP` / `ONLY` | empty | comma separated step names |
+| `MOVE_TO_HOME` | empty | self-updating tools to move from a root-owned directory to `~/.local/bin` (`--move-to-home`; `all` for every one) |
 | `TIMEOUT` | `300` | seconds a third-party tool may run |
 | `TOOL_TIMEOUT` | `120` | seconds a tool's own self-update command (`claude update`, `devin update`, ...) may run |
 | `PROBE_TIMEOUT` | `20` | seconds a `--version` probe (and the npm and git lookups of `--detailed`) may take |
@@ -667,6 +697,14 @@ never a reason to stop.
 
 `--self-update --dry-run` fetches and checks but does not change anything.
 
+After every run, system-update asks `SELF_UPDATE_REPO` for its latest
+release and, when it is newer than the running version, ends with
+`system-update X is available (this is Y): run system-update --self-update`.
+With `SELF_UPDATE_AUTO=1` in the config it runs the self-update itself at
+that point, so the next run uses the new release. `SELF_UPDATE_CHECK=0`
+turns the check off. No release, no network or a GitHub rate limit means
+no message; the run's result is never affected.
+
 To follow a fork instead, for every install method:
 
 ```
@@ -744,7 +782,7 @@ runs; `--dry-run` from a timer is a safe way to get a daily report instead.
 | `GitHub API rate limit reached` | Unauthenticated GitHub lookups are limited to 60 an hour; the rest of the run skips them. | Set `GITHUB_TOKEN` (any token, no scopes needed) in the config file or environment. |
 | `sudo credentials unavailable` / system step skipped | `sudo` asked for a password and none was given, or the run is not interactive. | Run it from a terminal, or add a `NOPASSWD` rule for unattended runs. |
 | `timed out after 300s` | A third-party command ran longer than `TIMEOUT`. | `--timeout 900`, or `TIMEOUT=900` in the config. Package managers have their own one-hour limit. |
-| `update command failed (timed out after 120s)` | A tool's own updater ran longer than `TOOL_TIMEOUT`. | `TOOL_TIMEOUT=300` in the config. |
+| `update command failed (timed out after 120s; still X; run '... update' in a terminal)` | A tool's own updater ran longer than `TOOL_TIMEOUT` and the version did not change. (When the new version is in place and only the updater failed to exit, the step reports it as updated instead.) | Run the named command in a terminal to see what it is waiting for, or `TOOL_TIMEOUT=300` in the config. |
 | `⚠ warn apt: ... package source(s) could not be refreshed` | A repository was unreachable; apt used the old lists for it. | Check the source in `/etc/apt/sources.list.d`; the rest of the upgrade went ahead. |
 | `⚠ warn reboot-check: reboot required` | A new kernel, a staged ostree deployment or a package asked for a reboot. | Reboot when convenient. |
 | A tool you use is not in the summary | It was not found on your `PATH`, or it is not supported. | `--list` shows every tool that was detected and where. |

@@ -32,7 +32,7 @@ _system_update() {
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   opts="--dry-run --detailed --yes --only --skip --list --verbose --quiet
     --no-color --color --timeout --config --firmware --prune-node --install-jq
-    --allow-unverified-installers --aur --no-autoremove --undo-flatpak --self-update --source
+    --allow-unverified-installers --move-to-home --aur --no-autoremove --undo-flatpak --self-update --install --install-user --source
     --branch --log --no-log --nvim-plugins --runtimes --npm-globals
     --go-toolchain --containers --completion --version --help"
 
@@ -49,7 +49,7 @@ _system_update() {
   fi
 
   case "$prev" in
-    --only|--skip)
+    --only|--skip|--move-to-home)
       # Comma separated: complete the item after the last comma and skip
       # the ones already given.
       local done_part="${cur%"${cur##*,}"}" item words="" s
