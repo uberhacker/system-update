@@ -13,7 +13,7 @@ Debian, Ubuntu, Linux Mint, Pop!_OS, elementary, Kali, Raspberry Pi OS and other
 
 1. `apt-get update`. apt exits 0 even when a source cannot be fetched, so the output is checked for `Failed to fetch`: some sources failing is a **warning** (the cached lists are used for those), all failing is a failure.
 2. `apt-get -y dist-upgrade` with `DEBIAN_FRONTEND=noninteractive`, `NEEDRESTART_MODE=a` and `--force-confdef --force-confold`.
-3. If the upgrade fails: `apt-get -f install` to repair, and the step is reported failed.
+3. If the upgrade fails: `apt-get -f install` to repair, and the step is reported failed with the packages dpkg stopped at (`dpkg: error processing package ...`).
 4. `apt-get autoremove --purge` (unless `--no-autoremove`).
 5. `apt-get clean`.
 
@@ -44,4 +44,5 @@ Debian, Ubuntu, Linux Mint, Pop!_OS, elementary, Kali, Raspberry Pi OS and other
 * Read the "to remove" count in the dry run before a real run: `dist-upgrade` removals are rare but real (held-back transitions, renamed libraries).
 * A new kernel is installed but only used after a reboot; the [reboot check](reboot-check.md) reports it.
 * Packages on hold (`apt-mark hold`) are respected.
+* **Systems without systemd** (Devuan, MX Linux, antiX, or Debian with sysvinit-core, OpenRC or runit) are supported: the step itself never calls systemd. Some packages' install scripts do, though. For example the post-install script of `pcp` runs `systemctl daemon-reload` whenever `systemctl` is installed, without checking that systemd is running, and fails with "System has not been booted with systemd as init system". When that happens the step says `pkg could not be set up: its install script needs systemd, which this system does not run` and suggests removing the package if you don't need it, or reporting it to its maintainer. apt retries the package on every run until then.
 * Third-party repositories (Docker, VSCodium, ...) are upgraded like any other source.

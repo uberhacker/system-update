@@ -206,6 +206,7 @@ run_user_tools_as_sudo_user() {
   cfg_bool RUNTIMES && args+=(--runtimes)
   cfg_bool NPM_GLOBALS && args+=(--npm-globals)
   cfg_bool CONTAINERS && args+=(--containers)
+  [ -n "$(cfg MOVE_TO_HOME)" ] && args+=(--move-to-home "$(cfg MOVE_TO_HOME)")
   if [ -n "$childlog" ]; then args+=(--log "$childlog"); else args+=(--no-log); fi
 
   log_info "running user-level tools as $SU_USER"
@@ -278,6 +279,11 @@ main() {
     exit 0
   fi
 
+  if [ -n "$SU_ARG_INSTALL" ]; then
+    selfupdate_install "$SU_ARG_INSTALL" || exit 1
+    exit 0
+  fi
+
   if [ "$SU_ARG_UNDO_FLATPAK" = 1 ]; then
     flatpak_undo_main || exit 1
     exit 0
@@ -335,6 +341,7 @@ main() {
   run_step extras reboot-check reboot_check_step
 
   summary_print || rc=1
+  selfupdate_release_check || true
   [ -n "$SU_LOG_FILE" ] && log_plain "  log: $SU_LOG_FILE"
   runlog_close "$rc"
   exit "$rc"

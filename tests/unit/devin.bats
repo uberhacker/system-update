@@ -82,3 +82,23 @@ serve_manifest() { printf '{"version":"%s","platforms":{}}\n' "$1" > "$manifest"
   assert_contains "$STEP_NOTE" "timed out after 2s"
   [ $((end - start)) -lt 15 ]
 }
+
+@test "devin update that installs the new version but never exits counts as updated" {
+  fake_devin 3000.12.28 "echo 3000.12.32 > \"$BATS_TEST_TMPDIR/ver\"; while :; do sleep 1; done"
+  serve_manifest 3000.12.32
+  SU_TOOL_TIMEOUT=2
+  tool_devin_update
+  assert_equal updated "$STEP_RESULT"
+  assert_contains "$STEP_NOTE" "3000.12.28 -> 3000.12.32"
+  assert_contains "$STEP_NOTE" "did not exit"
+}
+
+@test "a hung devin update that changed nothing says how to see what it waits for" {
+  fake_devin 3000.12.28 'while :; do sleep 1; done'
+  serve_manifest 3000.12.32
+  SU_TOOL_TIMEOUT=2
+  tool_devin_update
+  assert_equal failed "$STEP_RESULT"
+  assert_contains "$STEP_NOTE" "still 3000.12.28"
+  assert_contains "$STEP_NOTE" "run 'devin update' in a terminal"
+}

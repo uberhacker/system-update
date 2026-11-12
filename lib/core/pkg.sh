@@ -93,24 +93,36 @@ kernel_reboot_check() {
   return 0
 }
 
-# reboot_check_step: the "reboot-check" step body.
+# reboot_check_step: the "reboot-check" step body. The package manager's own
+# check, a running kernel that is gone, and firmware the firmware step saw
+# waiting for the next boot (SU_FIRMWARE_REBOOT) are all reported.
 reboot_check_step() {
-  local fn reason rc
+  local fn reason="" more rc
   if in_container; then
     step_skip "running in a container"
     return 0
   fi
   fn=$(pkg_fn reboot_check)
   if declare -F "$fn" >/dev/null; then
-    reason=$("$fn"); rc=$?
-    if [ "$rc" -eq 0 ]; then
-      step_warn "reboot required: ${reason:-pending updates}"
-      return 0
-    fi
+    rc=0
+    more=$("$fn") || rc=$?
+    if [ "$rc" -eq 0 ]; then reason="${more:-pending updates}"; fi
   fi
-  if reason=$(kernel_reboot_check); then
+  if [ -z "$reason" ] && more=$(kernel_reboot_check); then
+    reason="$more"
+  fi
+  if [ -n "${SU_FIRMWARE_REBOOT:-}" ]; then
+    reason="${reason:+$reason; }$SU_FIRMWARE_REBOOT"
+  fi
+  if [ -n "$reason" ]; then
     step_warn "reboot required: $reason"
     return 0
   fi
   step_ok "no reboot required"
+}
+
+# systemd_running: was the system booted with systemd (sd_booted(3))?
+# SU_SYSTEMD_RUN_DIR is a test hook.
+systemd_running() {
+  [ -d "${SU_SYSTEMD_RUN_DIR:-/run/systemd/system}" ]
 }

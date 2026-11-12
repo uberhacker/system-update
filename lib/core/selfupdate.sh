@@ -325,3 +325,144 @@ selfupdate_main() {
     selfupdate_tarball "$root" "$repo" "$branch"
   fi
 }
+
+# ---------------------------------------------------------------------------
+# --install / --install-user: put this program on PATH. A single-file build
+# copies itself; a checkout hands over to its install.sh.
+# ---------------------------------------------------------------------------
+
+# selfupdate_install_dirs MODE: sets SU_INSTALL_BIN and SU_INSTALL_COMP
+# (bash-completion directory) for MODE system or user. SU_INSTALL_ROOT is a
+# test hook that replaces /usr/local for the system mode.
+selfupdate_install_dirs() {
+  if [ "$1" = user ]; then
+    SU_INSTALL_BIN="$SU_USER_HOME/.local/bin"
+    SU_INSTALL_COMP="${XDG_DATA_HOME:-$SU_USER_HOME/.local/share}/bash-completion/completions"
+  else
+    SU_INSTALL_BIN="${SU_INSTALL_ROOT:-/usr/local}/bin"
+    SU_INSTALL_COMP="${SU_INSTALL_ROOT:-/usr/local}/share/bash-completion/completions"
+  fi
+}
+
+# _su_install_as MODE CMD...: run CMD as the user (user mode), or as root
+# unless the system directory is already ours to write (a test prefix).
+_su_install_as() {
+  local mode="$1"; shift
+  if [ "$mode" = user ]; then
+    run_user "$@"
+  elif is_root || [ -w "$SU_INSTALL_BIN" ] || { [ ! -e "$SU_INSTALL_BIN" ] && [ -w "$(dirname "$SU_INSTALL_BIN")" ]; }; then
+    log_cmd "$*"
+    "$@" </dev/null
+  else
+    run_root "$@"
+  fi
+}
+
+# selfupdate_on_path DIR: is DIR on the invoking user's PATH? Under sudo
+# the user's own PATH is not known, so only the user mode asks there.
+selfupdate_on_path() {
+  user_is_current || [ "$1" != "$SU_USER_HOME/.local/bin" ] || return 1
+  user_is_current || return 0
+  case ":$PATH:" in *":$1:"*) return 0 ;; esac
+  return 1
+}
+
+# selfupdate_install MODE: entry for --install (system) and --install-user.
+selfupdate_install() {
+  local mode="$1" dest comp tmp
+  log_step "install"
+  if [ "${SU_BUNDLED:-0}" != 1 ]; then
+    [ -x "$SU_ROOT/install.sh" ] || { log_error "no install.sh next to this program ($SU_ROOT)"; return 1; }
+    if [ "$SU_DRY_RUN" = 1 ]; then
+      if [ "$mode" = user ]; then log_dry "would run: $SU_ROOT/install.sh --user"; else log_dry "would run: $SU_ROOT/install.sh"; fi
+      return 0
+    fi
+    if [ "$mode" = user ]; then "$SU_ROOT/install.sh" --user; else "$SU_ROOT/install.sh"; fi
+    return
+  fi
+  selfupdate_install_dirs "$mode"
+  dest="$SU_INSTALL_BIN/system-update"
+  comp="$SU_INSTALL_COMP/system-update"
+  if [ -L "$dest" ]; then
+    log_error "$dest is a link to an installation from a checkout ($(readlink -f -- "$dest" 2>/dev/null)); update it with system-update --self-update, or remove it with install.sh --uninstall first"
+    return 1
+  fi
+  if [ "$(readlink -f -- "$dest" 2>/dev/null)" = "$(readlink -f -- "$SU_BIN")" ]; then
+    log_ok "already installed: $dest ($(version_string))"
+    return 0
+  fi
+  if [ -e "$dest" ] && ! grep -q '^SU_BUNDLED=1$' "$dest" 2>/dev/null; then
+    log_error "$dest exists and is not a single-file build of system-update; nothing changed"
+    return 1
+  fi
+  if [ "$SU_DRY_RUN" = 1 ]; then
+    log_dry "would install $SU_BIN as $dest"
+    log_dry "would write bash completion to $comp"
+    return 0
+  fi
+  if [ "$mode" = system ] && ! is_root && ! [ -w "$SU_INSTALL_BIN" ]; then
+    log_info "$SU_INSTALL_BIN is owned by root; sudo is required to install there (or use --install-user)"
+    sudo_prime || { log_error "sudo credentials unavailable; nothing changed"; return 1; }
+  fi
+  tmp=$(tmp_dir) || return 1
+  chmod 0755 "$tmp"
+  cp -- "$SU_BIN" "$tmp/system-update" && chmod 0755 "$tmp/system-update" || return 1
+  completion_main bash > "$tmp/system-update.bash" && chmod 0644 "$tmp/system-update.bash" || return 1
+  _su_install_as "$mode" mkdir -p "$SU_INSTALL_BIN" "$SU_INSTALL_COMP" || { log_error "could not create $SU_INSTALL_BIN"; return 1; }
+  # Stage, then rename: a running copy at $dest keeps reading its old inode.
+  _su_install_as "$mode" install -m 0755 "$tmp/system-update" "$dest.new.$$" || { log_error "could not write to $SU_INSTALL_BIN"; return 1; }
+  if ! _su_install_as "$mode" mv -f -- "$dest.new.$$" "$dest"; then
+    _su_install_as "$mode" rm -f -- "$dest.new.$$"
+    log_error "could not install $dest"
+    return 1
+  fi
+  _su_install_as "$mode" install -m 0644 "$tmp/system-update.bash" "$comp" || log_warn "could not write bash completion to $comp"
+  log_updated "installed $dest ($(version_string))"
+  log_info "bash completion: $comp (new shells)"
+  if ! selfupdate_on_path "$SU_INSTALL_BIN"; then
+    log_warn "$SU_INSTALL_BIN is not on your PATH; add this line to ~/.bashrc (or ~/.profile) and open a new shell:"
+    log_plain "    export PATH=\"$SU_INSTALL_BIN:\$PATH\""
+  fi
+  log_info "keep it current with: system-update --self-update (or SELF_UPDATE_AUTO=1 in the config)"
+}
+
+# ---------------------------------------------------------------------------
+# After a run: is there a newer release? (SELF_UPDATE_CHECK, SELF_UPDATE_AUTO)
+# ---------------------------------------------------------------------------
+
+# selfupdate_repo_slug URL: "owner/repo" for a https://github.com/ URL.
+selfupdate_repo_slug() {
+  local u="${1%/}"; u="${u%.git}"
+  [[ "$u" =~ ^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$ ]] || return 1
+  printf '%s/%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+}
+
+# selfupdate_installed_version: this program's version number.
+selfupdate_installed_version() {
+  if [ "${SU_BUNDLED:-0}" = 1 ]; then
+    printf '%s\n' "${SU_BUNDLE_VERSION:-}"
+  else
+    tr -d '[:space:]' < "$SU_ROOT/VERSION" 2>/dev/null
+  fi
+}
+
+# selfupdate_release_check: say when SELF_UPDATE_REPO has published a newer
+# release than this program; with SELF_UPDATE_AUTO=1 apply it now (it runs
+# from the next start). Quiet when the check cannot be made, and never
+# changes the run's exit status.
+selfupdate_release_check() {
+  local slug have latest
+  cfg_bool SELF_UPDATE_CHECK || return 0
+  slug=$(selfupdate_repo_slug "$(cfg SELF_UPDATE_REPO)") || return 0
+  have=$(selfupdate_installed_version)
+  [[ "$have" =~ ^[0-9]+\.[0-9]+ ]] || return 0
+  latest=$(gh_latest_version "$slug" 2>/dev/null) || return 0
+  [[ "$latest" =~ ^[0-9]+\.[0-9]+ ]] || return 0
+  version_lt "$have" "$latest" || return 0
+  if cfg_bool SELF_UPDATE_AUTO && [ "$SU_DRY_RUN" != 1 ]; then
+    log_info "system-update $latest is available (this is $have); updating (SELF_UPDATE_AUTO=1)"
+    ( selfupdate_main ) || log_warn "system-update could not update itself; run system-update --self-update to see why"
+    return 0
+  fi
+  log_warn "system-update $latest is available (this is $have): run system-update --self-update"
+}

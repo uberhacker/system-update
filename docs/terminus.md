@@ -5,7 +5,7 @@ Updates [Terminus](https://github.com/pantheon-systems/terminus), Pantheon's com
 | | |
 | --- | --- |
 | Step name | `terminus` |
-| Runs as | the invoking user, or root when the phar is not writable by the user |
+| Runs as | the invoking user, or root when the phar or its directory is not writable by the user |
 | Detected when | `terminus` is on `PATH` |
 | Settings | `TIMEOUT` |
 
@@ -17,6 +17,10 @@ Updates [Terminus](https://github.com/pantheon-systems/terminus), Pantheon's com
 
 * The Terminus phar, replaced in place.
 * Terminus plugins in `~/.terminus/plugins` are not updated; check them after a major Terminus update.
+
+## Moving it out of /usr/local/bin
+
+With `--move-to-home terminus` (or `MOVE_TO_HOME=terminus`), a copy in a root-owned directory is moved to `~/.local/bin` once (when that directory is on your `PATH` ahead of the old one), so later updates run as you without sudo. See [Third-party tools](../README.md#third-party-tools).
 
 ## Dry run and `--detailed`
 

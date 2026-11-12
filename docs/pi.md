@@ -5,7 +5,7 @@ The pi coding agent, updated with its own `pi update` command.
 | | |
 | --- | --- |
 | Step name | `pi` (for `--only` / `--skip`) |
-| Runs as | the invoking user (`SUDO_USER` under `sudo`) |
+| Runs as | the invoking user (`SUDO_USER` under `sudo`); its own updater as root when the binary's directory is not the user's to write |
 | Detected when | `pi` is on the user's `PATH` |
 | Expected package | none (probe only) |
 | Update command | `pi update` |
@@ -36,7 +36,7 @@ Every command runs with stdin closed. The tool's own updater is killed after `TO
 ## What will be affected
 
 * The `pi` installation only: the global npm/pnpm/bun package, the `uv`/`pipx` venv, or whatever the tool's own updater replaces (usually the binary under `~/.local/bin` or `~/.local/share`).
-* Files belong to the invoking user. Nothing is run as root and no system directory is touched.
+* Files belong to the invoking user. The one exception: when the tool updates itself and its binary sits in a directory the user can't write (for example a root-owned `/usr/local/bin`, where its installer puts it under `sudo`), the updater has to create files next to the binary, so it runs as root through `sudo`, with `HOME=/root` so nothing root-owned lands in the user's home. The directory's ownership is never changed.
 * Configuration, credentials and history of the tool are left alone by this script (the tool's own updater may migrate them).
 
 ## Dry run and `--detailed`
